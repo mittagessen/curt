@@ -195,7 +195,7 @@ def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
                            decoder_layers=decoder_layers,
                            backbone=backbone)
 
-    trainer = Trainer(default_root_dir=output, gradient_clip_val=clip_max_norm, **val_check_interval)
+    trainer = Trainer(default_root_dir=output, gradient_clip_val=clip_max_norm, gpus=device, **val_check_interval)
     trainer.fit(model, data_module)
 
 
