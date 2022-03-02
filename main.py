@@ -1,248 +1,203 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+#! /usr/bin/env python
+import glob
+import click
+import os.path
 import argparse
 import datetime
-import json
 import random
 import time
 from pathlib import Path
 
+import logging
+from rich.logging import RichHandler
+
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, DistributedSampler
 
-import datasets
-import util.misc as utils
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
-from models import build_model
+from pytorch_lightning import Trainer
+
+from models import CurveModel
+from dataset import CurveDataModule
 
 
-def get_args_parser():
-    parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
-    parser.add_argument('--lr', default=1e-4, type=float)
-    parser.add_argument('--lr_backbone', default=1e-5, type=float)
-    parser.add_argument('--batch_size', default=2, type=int)
-    parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--epochs', default=300, type=int)
-    parser.add_argument('--lr_drop', default=200, type=int)
-    parser.add_argument('--clip_max_norm', default=0.1, type=float,
-                        help='gradient clipping max norm')
-
-    # Model parameters
-    parser.add_argument('--frozen_weights', type=str, default=None,
-                        help="Path to the pretrained model. If set, only the mask head will be trained")
-    # * Backbone
-    parser.add_argument('--backbone', default='resnet50', type=str,
-                        help="Name of the convolutional backbone to use")
-    parser.add_argument('--dilation', action='store_true',
-                        help="If true, we replace stride with dilation in the last convolutional block (DC5)")
-    parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned'),
-                        help="Type of positional embedding to use on top of the image features")
-
-    # * Transformer
-    parser.add_argument('--enc_layers', default=6, type=int,
-                        help="Number of encoding layers in the transformer")
-    parser.add_argument('--dec_layers', default=6, type=int,
-                        help="Number of decoding layers in the transformer")
-    parser.add_argument('--dim_feedforward', default=2048, type=int,
-                        help="Intermediate size of the feedforward layers in the transformer blocks")
-    parser.add_argument('--hidden_dim', default=256, type=int,
-                        help="Size of the embeddings (dimension of the transformer)")
-    parser.add_argument('--dropout', default=0.1, type=float,
-                        help="Dropout applied in the transformer")
-    parser.add_argument('--nheads', default=8, type=int,
-                        help="Number of attention heads inside the transformer's attentions")
-    parser.add_argument('--num_queries', default=100, type=int,
-                        help="Number of query slots")
-    parser.add_argument('--pre_norm', action='store_true')
-
-    # * Segmentation
-    parser.add_argument('--masks', action='store_true',
-                        help="Train segmentation head if the flag is provided")
-
-    # Loss
-    parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
-                        help="Disables auxiliary decoding losses (loss at each layer)")
-    # * Matcher
-    parser.add_argument('--set_cost_class', default=1, type=float,
-                        help="Class coefficient in the matching cost")
-    parser.add_argument('--set_cost_bbox', default=5, type=float,
-                        help="L1 box coefficient in the matching cost")
-    parser.add_argument('--set_cost_giou', default=2, type=float,
-                        help="giou box coefficient in the matching cost")
-    # * Loss coefficients
-    parser.add_argument('--mask_loss_coef', default=1, type=float)
-    parser.add_argument('--dice_loss_coef', default=1, type=float)
-    parser.add_argument('--bbox_loss_coef', default=5, type=float)
-    parser.add_argument('--giou_loss_coef', default=2, type=float)
-    parser.add_argument('--eos_coef', default=0.1, type=float,
-                        help="Relative classification weight of the no-object class")
-
-    # dataset parameters
-    parser.add_argument('--dataset_file', default='coco')
-    parser.add_argument('--coco_path', type=str)
-    parser.add_argument('--coco_panoptic_path', type=str)
-    parser.add_argument('--remove_difficult', action='store_true')
-
-    parser.add_argument('--output_dir', default='',
-                        help='path where to save, empty for no saving')
-    parser.add_argument('--device', default='cuda',
-                        help='device to use for training / testing')
-    parser.add_argument('--seed', default=42, type=int)
-    parser.add_argument('--resume', default='', help='resume from checkpoint')
-    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
-                        help='start epoch')
-    parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--num_workers', default=2, type=int)
-
-    # distributed training parameters
-    parser.add_argument('--world_size', default=1, type=int,
-                        help='number of distributed processes')
-    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
-    return parser
+def set_logger(logger=None, level=logging.ERROR):
+    logger.addHandler(RichHandler(rich_tracebacks=True))
+    logger.setLevel(level)
 
 
-def main(args):
-    utils.init_distributed_mode(args)
-    print("git:\n  {}\n".format(utils.get_sha()))
+logging.captureWarnings(True)
+logger = logging.getLogger()
 
-    if args.frozen_weights is not None:
-        assert args.masks, "Frozen training is meant for segmentation only"
-    print(args)
 
-    device = torch.device(args.device)
+def _expand_gt(ctx, param, value):
+    images = []
+    for expression in value:
+        images.extend([x for x in glob.iglob(expression, recursive=True) if os.path.isfile(x)])
+    return images
 
-    # fix the seed for reproducibility
-    seed = args.seed + utils.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
 
-    model, criterion, postprocessors = build_model(args)
-    model.to(device)
+def _validate_manifests(ctx, param, value):
+    images = []
+    for manifest in value:
+        for entry in manifest.readlines():
+            im_p = entry.rstrip('\r\n')
+            if os.path.isfile(im_p):
+                images.append(im_p)
+            else:
+                logger.warning('Invalid entry "{}" in {}'.format(im_p, manifest.name))
+    return images
 
-    model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        model_without_ddp = model.module
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('number of params:', n_parameters)
 
-    param_dicts = [
-        {"params": [p for n, p in model_without_ddp.named_parameters() if "backbone" not in n and p.requires_grad]},
-        {
-            "params": [p for n, p in model_without_ddp.named_parameters() if "backbone" in n and p.requires_grad],
-            "lr": args.lr_backbone,
-        },
-    ]
-    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
-                                  weight_decay=args.weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
+def _validate_merging(ctx, param, value):
+    """
+    Maps baseline/region merging to a dict of merge structures.
+    """
+    if not value:
+        return None
+    merge_dict = {}
+    try:
+        for m in value:
+            k, v = m.split(':')
+            merge_dict[v] = k  # type: ignore
+    except Exception:
+        raise click.BadParameter('Mappings must be in format target:src')
+    return merge_dict
 
-    dataset_train = build_dataset(image_set='train', args=args)
-    dataset_val = build_dataset(image_set='val', args=args)
 
-    if args.distributed:
-        sampler_train = DistributedSampler(dataset_train)
-        sampler_val = DistributedSampler(dataset_val, shuffle=False)
+@click.group()
+@click.pass_context
+@click.option('-v', '--verbose', default=0, count=True)
+@click.option('-s', '--seed', default=None, type=click.INT,
+              help='Seed for numpy\'s and torch\'s RNG. Set to a fixed value to '
+                   'ensure reproducible random splits of data')
+def cli(ctx, verbose, seed):
+    if seed:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+
+    ctx.meta['verbose'] = verbose
+    set_logger(logger, level=30 - min(10 * verbose, 20))
+
+
+@cli.command('train')
+@click.pass_context
+@click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
+@click.option('-lr-bb', '--learning-rate-backbone', default=1e-5, help='Backbone learning rate')
+@click.option('-B', '--batch-size', default=2, help='Batch size')
+@click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
+@click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
+@click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
+              help='Model saving and report generation frequency in epochs '
+                   'during training. If frequency is >1 it must be an integer, '
+                   'i.e. running validation every n-th epoch.')
+@click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
+@click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
+@click.option('--train-mask-head/--no-train-mask-head', default=False, help='Flag to enable/disable training of the mask head. Pretrained weights must be loaded for this feature')
+@click.option('--backbone', default='resnet50', type=click.Choice(['resnet18', 'resnet34', 'resnet50']), help='Type of network to use for feature extractor')
+@click.option('-el', '--encoder-layers', default=6, help='Number of encoder layers in the transformer')
+@click.option('-dl', '--decoder-layers', default=6, help='Number of decoder layers in the transformer')
+@click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
+@click.option('-hdd', '--hidden-dim', default=256, help='Size of the embeddings (dimension of the transformer')
+@click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
+@click.option('-nh', '--num-heads', default=8, help="Number of attention heads inside the transformer's attentions")
+@click.option('-nq', '--num-queries', default=500, help='Number of query slots (#lines + #regions detectable in an image)')
+@click.option('--aux-loss/--no-aux-loss', default=True, help='Flag for auxiliary decoding losses (loss at each layer)')
+@click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
+@click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
+@click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
+@click.option('--eos-coef', default=0.1, help='Relative classification weight of the no-object class')
+@click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
+@click.option('-o', '--output', show_default=True, type=click.Path(), default='model', help='Output model file')
+@click.option('-p', '--partition', show_default=True, default=0.9,
+              help='Ground truth data partition ratio between train/validation set')
+@click.option('-t', '--training-files', show_default=True, default=None, multiple=True,
+              callback=_validate_manifests, type=click.File(mode='r', lazy=True),
+              help='File(s) with additional paths to training data')
+@click.option('-e', '--evaluation-files', show_default=True, default=None, multiple=True,
+              callback=_validate_manifests, type=click.File(mode='r', lazy=True),
+              help='File(s) with paths to evaluation data. Overrides the `-p` parameter')
+@click.option('--augment/--no-augment',
+              show_default=True,
+              default=False,
+              help='Enable image augmentation')
+@click.option('-vb', '--valid-baselines', show_default=True, default=None, multiple=True,
+              help='Valid baseline types in training data. May be used multiple times.')
+@click.option('-mb',
+              '--merge-baselines',
+              show_default=True,
+              default=None,
+              help='Baseline type merge mapping. Same syntax as `--merge-regions`',
+              multiple=True,
+              callback=_validate_merging)
+@click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
+@click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
+@click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
+def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
+          epochs, freq, lr_drop, clip_max_norm, train_mask_head, backbone,
+          encoder_layers, decoder_layers, dim_ff, hidden_dim, dropout,
+          num_heads, num_queries, aux_loss, match_cost_class, match_cost_curve,
+          curve_loss_coef, eos_coef, load, output, partition, training_files,
+          evaluation_files, augment, valid_baselines, merge_baselines, workers,
+          device, ground_truth):
+
+    if evaluation_files:
+        partition = 1
+    ground_truth = list(ground_truth)
+
+    if training_files:
+        ground_truth.extend(training_files)
+
+    if len(ground_truth) == 0:
+        raise click.UsageError('No training data was provided to the train command. Use `-t` or the `ground_truth` argument.')
+
+    if device == 'cpu':
+        device = None
+    elif device.startswith('cuda'):
+        device = [int(device.split(':')[-1])]
+
+    if freq > 1:
+        val_check_interval = {'check_val_every_n_epoch': int(freq)}
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        val_check_interval = {'val_check_interval': freq}
 
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True)
+    if not valid_baselines:
+        valid_baselines = None
 
-    data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
-                                   collate_fn=utils.collate_fn, num_workers=args.num_workers)
-    data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
-                                 drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+    data_module = CurveDataModule(train_files=ground_truth,
+                                  val_files=evaluation_files,
+                                  partition=partition,
+                                  valid_baselines=valid_baselines,
+                                  merge_baselines=merge_baselines,
+                                  max_lines=num_queries,
+                                  batch_size=batch_size,
+                                  num_workers=workers)
 
-    if args.dataset_file == "coco_panoptic":
-        # We also evaluate AP during panoptic training, on original coco DS
-        coco_val = datasets.coco.build("val", args)
-        base_ds = get_coco_api_from_dataset(coco_val)
+    if load:
+        model = CurveModel.load_from_checkpoint(load)
     else:
-        base_ds = get_coco_api_from_dataset(dataset_val)
+        model = CurveModel(data_module.num_classes+1,
+                           num_queries=num_queries,
+                           learning_rate=learning_rate,
+                           learning_rate_backbone=learning_rate_backbone,
+                           weight_decay=weight_decay,
+                           lr_drop=lr_drop,
+                           aux_loss=aux_loss,
+                           match_cost_class=match_cost_class,
+                           match_cost_curve=match_cost_curve,
+                           curve_loss_coef=curve_loss_coef,
+                           eos_coef=eos_coef,
+                           hidden_dim=hidden_dim,
+                           dropout=dropout,
+                           num_heads=num_heads,
+                           dim_ff=dim_ff,
+                           encoder_layers=encoder_layers,
+                           decoder_layers=decoder_layers,
+                           backbone=backbone)
 
-    if args.frozen_weights is not None:
-        checkpoint = torch.load(args.frozen_weights, map_location='cpu')
-        model_without_ddp.detr.load_state_dict(checkpoint['model'])
-
-    output_dir = Path(args.output_dir)
-    if args.resume:
-        if args.resume.startswith('https'):
-            checkpoint = torch.hub.load_state_dict_from_url(
-                args.resume, map_location='cpu', check_hash=True)
-        else:
-            checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
-        if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            args.start_epoch = checkpoint['epoch'] + 1
-
-    if args.eval:
-        test_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
-                                              data_loader_val, base_ds, device, args.output_dir)
-        if args.output_dir:
-            utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
-        return
-
-    print("Start training")
-    start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            sampler_train.set_epoch(epoch)
-        train_stats = train_one_epoch(
-            model, criterion, data_loader_train, optimizer, device, epoch,
-            args.clip_max_norm)
-        lr_scheduler.step()
-        if args.output_dir:
-            checkpoint_paths = [output_dir / 'checkpoint.pth']
-            # extra checkpoint before LR drop and every 100 epochs
-            if (epoch + 1) % args.lr_drop == 0 or (epoch + 1) % 100 == 0:
-                checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
-            for checkpoint_path in checkpoint_paths:
-                utils.save_on_master({
-                    'model': model_without_ddp.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'lr_scheduler': lr_scheduler.state_dict(),
-                    'epoch': epoch,
-                    'args': args,
-                }, checkpoint_path)
-
-        test_stats, coco_evaluator = evaluate(
-            model, criterion, postprocessors, data_loader_val, base_ds, device, args.output_dir
-        )
-
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     **{f'test_{k}': v for k, v in test_stats.items()},
-                     'epoch': epoch,
-                     'n_parameters': n_parameters}
-
-        if args.output_dir and utils.is_main_process():
-            with (output_dir / "log.txt").open("a") as f:
-                f.write(json.dumps(log_stats) + "\n")
-
-            # for evaluation logs
-            if coco_evaluator is not None:
-                (output_dir / 'eval').mkdir(exist_ok=True)
-                if "bbox" in coco_evaluator.coco_eval:
-                    filenames = ['latest.pth']
-                    if epoch % 50 == 0:
-                        filenames.append(f'{epoch:03}.pth')
-                    for name in filenames:
-                        torch.save(coco_evaluator.coco_eval["bbox"].eval,
-                                   output_dir / "eval" / name)
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
+    trainer = Trainer(default_root_dir=output, gradient_clip_val=clip_max_norm, **val_check_interval)
+    trainer.fit(model, data_module)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
-    args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    main(args)
+    cli()
