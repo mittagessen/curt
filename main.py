@@ -7,6 +7,7 @@ import datetime
 import random
 import time
 from pathlib import Path
+from PIL import Image
 
 import logging
 from rich.logging import RichHandler
@@ -19,15 +20,19 @@ from pytorch_lightning import Trainer
 from models import CurveModel
 from dataset import CurveDataModule
 
+from progress import KrakenTrainProgressBar
 
 def set_logger(logger=None, level=logging.ERROR):
     logger.addHandler(RichHandler(rich_tracebacks=True))
     logger.setLevel(level)
 
+# raise default max image size to 20k * 20k pixels
+Image.MAX_IMAGE_PIXELS = 20000 ** 2
 
 logging.captureWarnings(True)
 logger = logging.getLogger()
 
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def _expand_gt(ctx, param, value):
     images = []
@@ -195,7 +200,13 @@ def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
                            decoder_layers=decoder_layers,
                            backbone=backbone)
 
-    trainer = Trainer(default_root_dir=output, gradient_clip_val=clip_max_norm, gpus=device, **val_check_interval)
+    trainer = Trainer(default_root_dir=output,
+                      gradient_clip_val=clip_max_norm,
+                      max_epochs=epochs,
+                      gpus=device,
+                      callbacks=[KrakenTrainProgressBar()],
+                      **val_check_interval)
+
     trainer.fit(model, data_module)
 
 
