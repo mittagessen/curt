@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 from typing import Dict, Sequence, Callable, Any, Union, Optional
 from kraken.lib.xml import parse_xml
 from torch.utils.data import DataLoader, random_split, Subset
+from shapely.geometry import LineString
 
 from util.misc import collate_fn
 
@@ -155,6 +156,9 @@ class BaselineSet(Dataset):
                     for tag in tags:
                         # fit baseline to cubic bezier curve
                         baseline = np.array(line['baseline'])
+                        if len(baseline) < 8:
+                            ls = LineString(baseline)
+                            baseline = np.stack([np.array(ls.interpolate(x, normalized=True)) for x in np.linspace(0, 1, 8)])
                         # control points normalized to image size
                         control_pts = (np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]]))/im_size).flatten().tolist()
                         curves.append(control_pts)
