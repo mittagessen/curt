@@ -68,7 +68,10 @@ class MetricsTextColumn(ProgressColumn):
 
         text = ""
         for k, v in self._metrics.items():
-            text += "{v:.5 if isinstance(v, float) else v}"
+            if isinstance(v, float):
+                text += f'{v:.5} '
+            else:
+                text += f'{v} '
         return Text(text, justify="left")
 
 
