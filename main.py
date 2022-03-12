@@ -17,7 +17,7 @@ import torch
 
 from pytorch_lightning import Trainer
 
-from models import CurveModel
+from models import CurtCurveModel
 from dataset import CurveDataModule
 
 from progress import KrakenTrainProgressBar
@@ -179,26 +179,22 @@ def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
                                   num_workers=workers)
 
     if load:
-        model = CurveModel.load_from_checkpoint(load)
+        model = CurtCurveModel.load_from_checkpoint(load)
     else:
-        model = CurveModel(data_module.num_classes+1,
-                           num_queries=num_queries,
-                           learning_rate=learning_rate,
-                           learning_rate_backbone=learning_rate_backbone,
-                           weight_decay=weight_decay,
-                           lr_drop=lr_drop,
-                           aux_loss=aux_loss,
-                           match_cost_class=match_cost_class,
-                           match_cost_curve=match_cost_curve,
-                           curve_loss_coef=curve_loss_coef,
-                           eos_coef=eos_coef,
-                           hidden_dim=hidden_dim,
-                           dropout=dropout,
-                           num_heads=num_heads,
-                           dim_ff=dim_ff,
-                           encoder_layers=encoder_layers,
-                           decoder_layers=decoder_layers,
-                           backbone=backbone)
+        model = CurtCurveModel(data_module.num_classes+1,
+                               num_queries=num_queries,
+                               learning_rate=learning_rate,
+                               weight_decay=weight_decay,
+                               lr_drop=lr_drop,
+                               match_cost_class=match_cost_class,
+                               match_cost_curve=match_cost_curve,
+                               curve_loss_coef=curve_loss_coef,
+                               eos_coef=eos_coef,
+                               hidden_dim=hidden_dim,
+                               dropout=dropout,
+                               num_heads=num_heads,
+                               dim_ff=dim_ff,
+                               image_size=data_module.image_size)
 
     trainer = Trainer(default_root_dir=output,
                       gradient_clip_val=clip_max_norm,

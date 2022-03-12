@@ -27,7 +27,8 @@ class CurveDataModule(pl.LightningDataModule):
                  merge_baselines: Dict[str, Sequence[str]] = None,
                  max_lines: int = 400,
                  batch_size: int = 2,
-                 num_workers: int = 2):
+                 num_workers: int = 2,
+                 image_size=(1200, 800)):
 
         super().__init__()
 
@@ -38,7 +39,7 @@ class CurveDataModule(pl.LightningDataModule):
             tf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-        self._train_transforms = tf.Compose([tf.Resize(800, max_size=1333),
+        self._train_transforms = tf.Compose([tf.Resize(self.hparams.image_size),
                                              normalize])
         self._val_transforms = self._train_transforms
 
@@ -67,6 +68,7 @@ class CurveDataModule(pl.LightningDataModule):
         self.curve_train = train_set
         self.curve_val = val_set
         self.num_classes = train_set.dataset.num_classes
+        self.image_size = self.hparams.image_size
 
     def train_dataloader(self):
         return DataLoader(self.curve_train,
@@ -158,9 +160,9 @@ class BaselineSet(Dataset):
                         baseline = np.array(line['baseline'])
                         if len(baseline) < 8:
                             ls = LineString(baseline)
-                            baseline = np.stack([np.array(ls.interpolate(x, normalized=True)) for x in np.linspace(0, 1, 8)])
+                            baseline = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
                         # control points normalized to image size
-                        control_pts = (np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]]))/im_size).flatten().tolist()
+                        control_pts = np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]])).flatten().tolist()
                         curves.append(control_pts)
                         labels.append(self.class_mapping[self.mbl_dict.get(tag, tag)])
                         self.class_stats['baselines'][self.mbl_dict.get(tag, tag)] += 1

@@ -1,7 +1,11 @@
+import copy
 import numpy as np
-import torch.nn as nn
 import torch.nn.functional as F
 import torch
+
+from typing import Optional, List
+
+from torch import Tensor, nn
 
 class MLP(nn.Module):
     """
@@ -43,7 +47,12 @@ class CurveFormerHead(nn.Module):
                  num_classes=2,
                  embedding_dim=256,
                  dropout_ratio=0.1,
-                 feature_map_size=(300, 200)):
+                 feature_map_size=(300, 200),
+                 nhead=8,
+                 dim_feedforward=2048,
+                 activation='relu',
+                 normalize_before=False,
+                 num_decoder_layers=3):
         super().__init__()
         self.in_channels = in_channels
         self.embedding_dim = embedding_dim
@@ -58,15 +67,22 @@ class CurveFormerHead(nn.Module):
         self.linear_c2 = MLP(input_dim=c2_in_channels, embed_dim=embedding_dim)
         self.linear_c1 = MLP(input_dim=c1_in_channels, embed_dim=embedding_dim)
 
-        self.conv = nn.Conv2d(embedding_dim*4, num_queries, kernel_size=(1, 1), stride=(1, 1), bias=False)
-        self.bn = nn.BatchNorm2d(num_queries)
+        self.conv = nn.Conv2d(embedding_dim*4, embedding_dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        self.bn = nn.BatchNorm2d(embedding_dim)
         self.dropout = nn.Dropout2d(dropout_ratio)
 
-        self.curve_embed = CurveHead(self.feature_map_size[0] * self.feature_map_size[1], hidden_dim, 8, 3)
-        self.class_embed = nn.Linear(self.feature_map_size[0] * self.feature_map_size[1], num_classes+1)
+        decoder_layer = TransformerDecoderLayer(embedding_dim, nhead, dim_feedforward,
+                                                dropout_ratio, activation, normalize_before)
 
-    def forward(self, x):
-        c1, c2, c3, c4 = x
+        decoder_norm = nn.LayerNorm(embedding_dim)
+        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
+        self.query_embed = nn.Embedding(num_queries, embedding_dim)
+
+        self.curve_embed = CurveHead(embedding_dim, embedding_dim, 8, 3)
+        self.class_embed = nn.Linear(embedding_dim, num_classes+1)
+
+    def forward(self, features, mask):
+        c1, c2, c3, c4 = features
 
         ############## MLP decoder on C1-C4 ###########
         n, _, h, w = c4.shape
@@ -87,8 +103,141 @@ class CurveFormerHead(nn.Module):
         x = F.relu(x)
 
         x = self.dropout(x)
-        x = x.flatten(2)
+        x = x.flatten(2).permute(2, 0, 1)
+        query_embed = self.query_embed.weight.unsqueeze(1).repeat(1, n, 1)
+        mask = mask.flatten(1)
+        tgt = torch.zeros_like(query_embed)
+
+        x = self.decoder(tgt, x, memory_key_padding_mask=mask, query_pos=query_embed)
+
         output_curves = self.curve_embed(x).sigmoid()
         output_class = self.class_embed(x)
 
-        return {'pred_logits': output_class, 'pred_curves': output_curves}
+        return {'pred_logits': output_class[-1], 'pred_curves': output_curves[-1]}
+
+
+class TransformerDecoder(nn.Module):
+
+    def __init__(self, decoder_layer, num_layers, norm=None):
+        super().__init__()
+        self.layers = _get_clones(decoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+
+    def forward(self, tgt, memory,
+                tgt_mask: Optional[Tensor] = None,
+                memory_mask: Optional[Tensor] = None,
+                tgt_key_padding_mask: Optional[Tensor] = None,
+                memory_key_padding_mask: Optional[Tensor] = None,
+                query_pos: Optional[Tensor] = None):
+        output = tgt
+
+        for layer in self.layers:
+            output = layer(output, memory, tgt_mask=tgt_mask,
+                           memory_mask=memory_mask,
+                           tgt_key_padding_mask=tgt_key_padding_mask,
+                           memory_key_padding_mask=memory_key_padding_mask,
+                           query_pos=query_pos)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output.unsqueeze(0).transpose(1, 2)
+
+
+class TransformerDecoderLayer(nn.Module):
+
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
+                 activation="relu", normalize_before=False):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        # Implementation of Feedforward model
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+
+        self.activation = _get_activation_fn(activation)
+        self.normalize_before = normalize_before
+
+    def with_pos_embed(self, tensor, pos: Optional[Tensor]):
+        return tensor if pos is None else tensor + pos
+
+    def forward_post(self, tgt, memory,
+                     tgt_mask: Optional[Tensor] = None,
+                     memory_mask: Optional[Tensor] = None,
+                     tgt_key_padding_mask: Optional[Tensor] = None,
+                     memory_key_padding_mask: Optional[Tensor] = None,
+                     query_pos: Optional[Tensor] = None):
+        q = k = self.with_pos_embed(tgt, query_pos)
+        tgt2 = self.self_attn(q, k, value=tgt, attn_mask=tgt_mask,
+                              key_padding_mask=tgt_key_padding_mask)[0]
+        tgt = tgt + self.dropout1(tgt2)
+        tgt = self.norm1(tgt)
+        tgt2 = self.multihead_attn(query=self.with_pos_embed(tgt, query_pos),
+                                   key=memory,
+                                   value=memory, attn_mask=memory_mask,
+                                   key_padding_mask=memory_key_padding_mask)[0]
+        tgt = tgt + self.dropout2(tgt2)
+        tgt = self.norm2(tgt)
+        tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
+        tgt = tgt + self.dropout3(tgt2)
+        tgt = self.norm3(tgt)
+        return tgt
+
+    def forward_pre(self, tgt, memory,
+                    tgt_mask: Optional[Tensor] = None,
+                    memory_mask: Optional[Tensor] = None,
+                    tgt_key_padding_mask: Optional[Tensor] = None,
+                    memory_key_padding_mask: Optional[Tensor] = None,
+                    query_pos: Optional[Tensor] = None):
+        tgt2 = self.norm1(tgt)
+        q = k = self.with_pos_embed(tgt2, query_pos)
+        tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask,
+                              key_padding_mask=tgt_key_padding_mask)[0]
+        tgt = tgt + self.dropout1(tgt2)
+        tgt2 = self.norm2(tgt)
+        tgt2 = self.multihead_attn(query=self.with_pos_embed(tgt2, query_pos),
+                                   key=memory,
+                                   value=memory, attn_mask=memory_mask,
+                                   key_padding_mask=memory_key_padding_mask)[0]
+        tgt = tgt + self.dropout2(tgt2)
+        tgt2 = self.norm3(tgt)
+        tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
+        tgt = tgt + self.dropout3(tgt2)
+        return tgt
+
+    def forward(self, tgt, memory,
+                tgt_mask: Optional[Tensor] = None,
+                memory_mask: Optional[Tensor] = None,
+                tgt_key_padding_mask: Optional[Tensor] = None,
+                memory_key_padding_mask: Optional[Tensor] = None,
+                query_pos: Optional[Tensor] = None):
+        if self.normalize_before:
+            return self.forward_pre(tgt, memory, tgt_mask, memory_mask,
+                                    tgt_key_padding_mask, memory_key_padding_mask, query_pos)
+        return self.forward_post(tgt, memory, tgt_mask, memory_mask,
+                                 tgt_key_padding_mask, memory_key_padding_mask, query_pos)
+
+
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
+
+def _get_activation_fn(activation):
+    """Return an activation function given a string"""
+    if activation == "relu":
+        return F.relu
+    if activation == "gelu":
+        return F.gelu
+    if activation == "glu":
+        return F.glu
+    raise RuntimeError(F"activation should be relu/gelu, not {activation}.")
+
