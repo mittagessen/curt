@@ -16,7 +16,7 @@ from kraken.lib.xml import parse_xml
 from torch.utils.data import DataLoader, random_split, Subset
 from shapely.geometry import LineString
 
-from util.misc import collate_fn
+from curt.util.misc import collate_fn
 
 class CurveDataModule(pl.LightningDataModule):
     def __init__(self,

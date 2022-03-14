@@ -1,26 +1,23 @@
 #! /usr/bin/env python
 import glob
+import time
+import torch
 import click
 import os.path
-import argparse
-import datetime
 import random
-import time
-from pathlib import Path
-from PIL import Image
-
 import logging
-from rich.logging import RichHandler
-
+import datetime
 import numpy as np
-import torch
 
+from PIL import Image
+from pathlib import Path
+from rich.logging import RichHandler
 from pytorch_lightning import Trainer
 
-from models import CurtCurveModel
-from dataset import CurveDataModule
+from curt.models import CurtCurveModel
+from curt.dataset import CurveDataModule
+from curt.progress import KrakenTrainProgressBar
 
-from progress import KrakenTrainProgressBar
 
 def set_logger(logger=None, level=logging.ERROR):
     logger.addHandler(RichHandler(rich_tracebacks=True))
