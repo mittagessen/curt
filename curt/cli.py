@@ -14,7 +14,7 @@ from pathlib import Path
 from rich.logging import RichHandler
 from pytorch_lightning import Trainer
 
-from curt.models import CurtCurveModel
+from curt.models import DetrCurveModel, CurtCurveModel
 from curt.dataset import CurveDataModule
 from curt.progress import KrakenTrainProgressBar
 
@@ -176,9 +176,9 @@ def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
                                   num_workers=workers)
 
     if load:
-        model = CurtCurveModel.load_from_checkpoint(load)
+        model = DetrCurveModel.load_from_checkpoint(load)
     else:
-        model = CurtCurveModel(data_module.num_classes+1,
+        model = DetrCurveModel(data_module.num_classes+1,
                                num_queries=num_queries,
                                learning_rate=learning_rate,
                                weight_decay=weight_decay,
