@@ -8,15 +8,14 @@ from torch import nn
 from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, interpolate,
                        is_dist_avail_and_initialized)
-
+from typing import Tuple
 
 from .mix_transformer import MixVisionTransformer, mit_b0
 from .head import CurveFormerHead
 
-
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, image_size, num_classes, num_queries):
+    def __init__(self, image_size: Tuple[int, int], num_classes: int, num_queries: int, pretrained: bool = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -24,12 +23,14 @@ class Curt(nn.Module):
             num_classes: number of object classes
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
+            pretrained: Load pretrained weights for encoder.
         """
         super().__init__()
         self.image_size = image_size
         self.num_classes = num_classes
         self.num_queries = num_queries
-        self.transformer = mit_b0()
+        self.transformer = mit_b0(pretrained=pretrained)
+
         self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
                                     num_queries=num_queries,
                                     num_classes=num_classes,
