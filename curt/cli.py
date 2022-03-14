@@ -190,8 +190,7 @@ def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
                                hidden_dim=hidden_dim,
                                dropout=dropout,
                                num_heads=num_heads,
-                               dim_ff=dim_ff,
-                               image_size=data_module.image_size)
+                               dim_ff=dim_ff)
 
     trainer = Trainer(default_root_dir=output,
                       gradient_clip_val=clip_max_norm,

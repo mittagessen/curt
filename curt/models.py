@@ -28,13 +28,12 @@ class CurtCurveModel(LightningModule):
                  hidden_dim: int = 256,
                  dropout: float = 0.1,
                  num_heads: int = 8,
-                 dim_ff: int = 2048,
-                 image_size: Tuple[int, int] = (1200, 800)):
+                 dim_ff: int = 2048):
         super().__init__()
 
         self.save_hyperparameters()
 
-        self.model = Curt(image_size=image_size, num_queries=num_queries, num_classes=num_classes)
+        self.model = Curt(num_queries=num_queries, num_classes=num_classes)
 
         matcher = HungarianMatcher(cost_class=match_cost_class,
                                    cost_curve=match_cost_curve)
@@ -79,7 +78,7 @@ class CurtCurveModel(LightningModule):
 
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, image_size: Tuple[int, int], num_classes: int, num_queries: int, pretrained: bool = True):
+    def __init__(self, num_classes: int, num_queries: int, pretrained: bool = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -90,15 +89,13 @@ class Curt(nn.Module):
             pretrained: Load pretrained weights for encoder.
         """
         super().__init__()
-        self.image_size = image_size
         self.num_classes = num_classes
         self.num_queries = num_queries
         self.transformer = mit_b0(pretrained=pretrained)
 
         self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
                                     num_queries=num_queries,
-                                    num_classes=num_classes,
-                                    feature_map_size=(self.image_size[0]//4, self.image_size[1]//4))
+                                    num_classes=num_classes)
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -117,6 +114,7 @@ class Curt(nn.Module):
         features = self.transformer(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
         return self.head(features, mask)
+
 
 class SetCriterion(nn.Module):
     """ This class computes the loss for DETR.

@@ -10,10 +10,12 @@ import numpy as np
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
 
+from scipy.special import comb
+from shapely.geometry import LineString
+
 from shapely.ops import clip_by_rect
 
-from curt.dataset import Bezier_coeff
-
+# done
 def crop(image, target, region):
     cropped_image = F.crop(image, *region)
 
@@ -21,25 +23,26 @@ def crop(image, target, region):
     # top, left, height, width
     i, j, h, w = region
 
-    # should we do something wrt the original size?
-    target["size"] = torch.tensor([h, w])
+    curves = []
+    for curve in target:
+        res = clip_by_rect(LineString(curve[1]), j, i, j+w, i+h)
+        if res.type == 'LineString' and res.length:
+            curves.append((curve[0], np.array(res.coords)))
 
-    fields = ["labels", "area", "iscrowd"]
+    return cropped_image, curves
 
-    if "curves" in target:
-        curves = target["curves"]
-        max_size = torch.as_tensor([w, h], dtype=torch.float32)
-        # sample curves
-        mapped_curves = BezierCoeff(np.linspace(0, 1, 80)).dot(curves)
-        cropped_curves = curves - torch.as_tensor([j, i] * 80)
-        cropped_curves = torch.min(cropped_curves.reshape(-1, 2, 2), max_size)
-        cropped_curves = cropped_curves.clamp(min=0)
-        area = (cropped_curves[:, 1, :] - cropped_curves[:, 0, :]).prod(dim=1)
-        target["curves"] = cropped_curves.reshape(-1, 4)
-        target["area"] = area
-        fields.append("curves")
+# done
+def hflip(image, target):
+    flipped_image = F.hflip(image)
 
-    return cropped_image, target
+    w, h = image.size
+
+    target = target.copy()
+    curves = []
+    for curve in target:
+        curves.append((curve[0], curve[1] * [-1, 1] + [w, 0]))
+
+    return flipped_image, target
 
 # done
 def resize(image, target, size, max_size=None):
@@ -81,21 +84,11 @@ def resize(image, target, size, max_size=None):
     ratio_width, ratio_height = ratios
 
     target = target.copy()
-    if "curves" in target:
-        curves = target["curves"]
-        scaled_curves = curves * torch.as_tensor([ratio_width, ratio_height, ratio_width, ratio_height,
-                                                  ratio_width, ratio_height, ratio_width, ratio_height])
-        target["curves"] = scaled_curves
+    curves = []
+    for curve in target:
+        curves.append((curve[0], curve[1] * [ratio_width, ratio_height]))
 
-    if "area" in target:
-        area = target["area"]
-        scaled_area = area * (ratio_width * ratio_height)
-        target["area"] = scaled_area
-
-    h, w = size
-    target["size"] = torch.tensor([h, w])
-
-    return rescaled_image, target
+    return rescaled_image, curves
 
 # done
 def pad(image, target, padding):
@@ -103,9 +96,6 @@ def pad(image, target, padding):
     padded_image = F.pad(image, (0, 0, padding[0], padding[1]))
     if target is None:
         return padded_image, None
-    target = target.copy()
-    # should we do something wrt the original size?
-    target["size"] = torch.tensor(padded_image.size[::-1])
     return padded_image, target
 
 # done
@@ -140,6 +130,18 @@ class CenterCrop(object):
         crop_top = int(round((image_height - crop_height) / 2.))
         crop_left = int(round((image_width - crop_width) / 2.))
         return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
+
+
+# done
+class RandomHorizontalFlip(object):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img, target):
+        if random.random() < self.p:
+            return hflip(img, target)
+        return img, target
+
 
 # done
 class RandomResize(object):
@@ -200,14 +202,58 @@ class Normalize(object):
 
     def __call__(self, image, target=None):
         image = F.normalize(image, mean=self.mean, std=self.std)
-        if target is None:
-            return image, None
-        target = target.copy()
-        if "curves" in target:
-            curves = target["curves"]
-            curves = curves / torch.tensor([w, h, w, h, w, h, w, h], dtype=torch.float32)
-            target["curves"] = curves
         return image, target
+
+# magic lsq cubic bezier fit function from the internet.
+def Mtk(n, t, k):
+    return t**k * (1-t)**(n-k) * comb(n,k)
+
+
+def BezierCoeff(ts):
+    return [[Mtk(3,t,k) for k in range(4)] for t in ts]
+
+
+def bezier_fit(bl):
+    x = bl[:, 0]
+    y = bl[:, 1]
+    dy = y[1:] - y[:-1]
+    dx = x[1:] - x[:-1]
+    dt = (dx ** 2 + dy ** 2)**0.5
+    t = dt/dt.sum()
+    t = np.hstack(([0], t))
+    t = t.cumsum()
+
+    Pseudoinverse = np.linalg.pinv(BezierCoeff(t))  # (9,4) -> (4,9)
+
+    control_points = Pseudoinverse.dot(bl)  # (4,9)*(9,2) -> (4,2)
+    medi_ctp = control_points[1:-1,:]
+    return medi_ctp
+
+
+class BezierFit(object):
+    def __init__(self, min_points: int = 8):
+        """
+        Fits and normalizes a polyline to a bezier curve.
+
+        Args:
+            min_points: Minimum number of points in each line used for spline
+                        fit. If the input has less points additional points
+                        will be sampled.
+        """
+        self.min_points = min_points
+
+    def __call__(self, image, target):
+        labels = []
+        curves = []
+        for line in target:
+            label, curve = line
+            if len(curve) < self.min_points:
+                ls = LineString(curve)
+                curve = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
+            # control points normalized to image size
+            curves.append(np.concatenate(([curve[0]], bezier_fit(curve), [curve[-1]])).flatten().tolist())
+            labels.append(label)
+        return image, {'labels': torch.LongTensor(labels), 'curves': torch.Tensor(curves)}
 
 # done
 class Compose(object):

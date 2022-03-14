@@ -47,7 +47,6 @@ class CurveFormerHead(nn.Module):
                  num_classes=2,
                  embedding_dim=256,
                  dropout_ratio=0.1,
-                 feature_map_size=(300, 200),
                  nhead=8,
                  dim_feedforward=2048,
                  activation='relu',
@@ -58,7 +57,6 @@ class CurveFormerHead(nn.Module):
         self.embedding_dim = embedding_dim
         self.num_queries = num_queries
         self.num_classes = num_classes
-        self.feature_map_size = feature_map_size
 
         c1_in_channels, c2_in_channels, c3_in_channels, c4_in_channels = self.in_channels
 

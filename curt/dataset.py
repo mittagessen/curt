@@ -5,11 +5,10 @@ import torch
 import pathlib
 import numpy as np
 import pytorch_lightning as pl
+import curt.transforms as tf
 
 from PIL import Image
 from collections import defaultdict
-from torchvision import transforms as tf
-from scipy.special import comb
 from torch.utils.data import Dataset
 from typing import Dict, Sequence, Callable, Any, Union, Optional
 from kraken.lib.xml import parse_xml
@@ -27,21 +26,30 @@ class CurveDataModule(pl.LightningDataModule):
                  merge_baselines: Dict[str, Sequence[str]] = None,
                  max_lines: int = 400,
                  batch_size: int = 2,
-                 num_workers: int = 2,
-                 image_size=(1200, 800)):
-
+                 num_workers: int = 2):
         super().__init__()
 
         self.save_hyperparameters()
 
-        normalize = tf.Compose([
-            tf.ToTensor(),
-            tf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+        normalize = tf.Compose([tf.ToTensor(),
+                                tf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                                tf.BezierFit()])
 
-        self._train_transforms = tf.Compose([tf.Resize(self.hparams.image_size),
-                                             normalize])
-        self._val_transforms = self._train_transforms
+        self._train_transforms = tf.Compose([tf.RandomHorizontalFlip(),
+                                             tf.RandomSelect(
+                                                 tf.RandomResize(scales, max_size=1333),
+                                                 tf.Compose([
+                                                     tf.RandomResize([400, 500, 600]),
+                                                     tf.RandomSizeCrop(384, 600),
+                                                     tf.RandomResize(scales, max_size=1333),
+                                                 ])
+                                             ),
+                                             normalize,
+                                         ])
+
+        self._val_transforms = tf.Compose([tf.RandomResize([800], max_size=1333),
+                                           normalize])
 
         train_set = BaselineSet(self.hparams.train_files,
                                 self._train_transforms,
@@ -68,7 +76,6 @@ class CurveDataModule(pl.LightningDataModule):
         self.curve_train = train_set
         self.curve_val = val_set
         self.num_classes = train_set.dataset.num_classes
-        self.image_size = self.hparams.image_size
 
     def train_dataloader(self):
         return DataLoader(self.curve_train,
@@ -81,32 +88,6 @@ class CurveDataModule(pl.LightningDataModule):
                           collate_fn=collate_fn,
                           batch_size=self.hparams.batch_size,
                           num_workers=self.hparams.num_workers)
-
-
-# magic lsq cubic bezier fit function from the internet.
-def Mtk(n, t, k):
-    return t**k * (1-t)**(n-k) * comb(n,k)
-
-
-def BezierCoeff(ts):
-    return [[Mtk(3,t,k) for k in range(4)] for t in ts]
-
-
-def bezier_fit(bl):
-    x = bl[:, 0]
-    y = bl[:, 1]
-    dy = y[1:] - y[:-1]
-    dx = x[1:] - x[:-1]
-    dt = (dx ** 2 + dy ** 2)**0.5
-    t = dt/dt.sum()
-    t = np.hstack(([0], t))
-    t = t.cumsum()
-
-    Pseudoinverse = np.linalg.pinv(BezierCoeff(t))  # (9,4) -> (4,9)
-
-    control_points = Pseudoinverse.dot(bl)  # (4,9)*(9,2) -> (4,2)
-    medi_ctp = control_points[1:-1,:]
-    return medi_ctp
 
 
 class BaselineSet(Dataset):
@@ -144,13 +125,13 @@ class BaselineSet(Dataset):
         self.valid_baselines = valid_baselines
         im_paths = []
         self.targets = []
+
         for img in imgs:
             data = parse_xml(img)
             try:
                 im_size = Image.open(data['image']).size
             except FileNotFoundError:
                 continue
-            labels = []
             curves = []
             for line in data['lines']:
                 if valid_baselines is None or set(line['tags'].values()).intersection(valid_baselines):
@@ -162,27 +143,25 @@ class BaselineSet(Dataset):
                             ls = LineString(baseline)
                             baseline = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
                         # control points normalized to image size
-                        control_pts = np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]])).flatten().tolist()
-                        curves.append(control_pts)
-                        labels.append(self.class_mapping[self.mbl_dict.get(tag, tag)])
+                        #control_pts = np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]])).flatten().tolist()
+                        curves.append((self.class_mapping[self.mbl_dict.get(tag, tag)], baseline))
                         self.class_stats['baselines'][self.mbl_dict.get(tag, tag)] += 1
-            if len(labels) > max_lines:
+            if len(curves) > max_lines:
                 continue
-            self.max_lines_per_page = max(self.max_lines_per_page, len(labels))
-            if not len(labels):
+            self.max_lines_per_page = max(self.max_lines_per_page, len(curves))
+            if not len(curves):
                 continue
-            self.targets.append({'labels': torch.LongTensor(labels), 'curves': torch.Tensor(curves)})
+            self.targets.append(curves)
             im_paths.append(data['image'])
 
         self.imgs = im_paths
-        self.transforms = im_transforms
+        self._transforms = im_transforms
         self.num_classes = max(self.class_mapping.values())
 
     def __getitem__(self, idx):
         im = self.imgs[idx]
         target = self.targets[idx]
-        im = self.transforms(Image.open(im).convert('RGB'))
-        return (im, target)
+        return self._transforms(Image.open(im).convert('RGB'), target)
 
     def __len__(self):
         return len(self.imgs)
