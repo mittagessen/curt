@@ -110,7 +110,7 @@ def cli(ctx, verbose, seed):
 @click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
 @click.option('--eos-coef', default=0.1, help='Relative classification weight of the no-object class')
 @click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
-@click.option('-o', '--output', show_default=True, type=click.Path(), default='model', help='Output model file')
+@click.option('-o', '--output', show_default=True, type=click.Path(), default='curt_model', help='Pytorch lightning output directory')
 @click.option('-p', '--partition', show_default=True, default=0.9,
               help='Ground truth data partition ratio between train/validation set')
 @click.option('-t', '--training-files', show_default=True, default=None, multiple=True,
