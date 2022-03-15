@@ -27,7 +27,7 @@ def crop(image, target, region):
     for curve in target:
         res = clip_by_rect(LineString(curve[1]), j, i, j+w, i+h)
         if res.type == 'LineString' and res.length:
-            curves.append((curve[0], np.array(res.coords)))
+            curves.append((curve[0], np.array(res.coords)-[j, i]))
 
     return cropped_image, curves
 
@@ -245,13 +245,18 @@ class BezierFit(object):
     def __call__(self, image, target):
         labels = []
         curves = []
+        if isinstance(image, PIL.Image.Image):
+            im_size = image.size
+        else:
+            im_size = tuple(image.shape[1:][::-1])
+
         for line in target:
             label, curve = line
             if len(curve) < self.min_points:
                 ls = LineString(curve)
                 curve = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
             # control points normalized to image size
-            curves.append(np.concatenate(([curve[0]], bezier_fit(curve), [curve[-1]])).flatten().tolist())
+            curves.append((np.concatenate(([curve[0]], bezier_fit(curve), [curve[-1]]))/im_size).flatten().tolist())
             labels.append(label)
         return image, {'labels': torch.LongTensor(labels), 'curves': torch.Tensor(curves)}
 
