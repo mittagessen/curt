@@ -139,6 +139,8 @@ class BaselineSet(Dataset):
                     for tag in tags:
                         # fit baseline to cubic bezier curve
                         baseline = np.array(line['baseline'])
+                        if len(baseline) < 2:
+                            continue
                         if len(baseline) < 8:
                             ls = LineString(baseline)
                             baseline = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
