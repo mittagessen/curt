@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-
+import PIL
 import torch
 import pathlib
 import numpy as np
@@ -130,7 +130,7 @@ class BaselineSet(Dataset):
             data = parse_xml(img)
             try:
                 im_size = Image.open(data['image']).size
-            except FileNotFoundError:
+            except (FileNotFoundError, PIL.UnidentifiedImageError):
                 continue
             curves = []
             for line in data['lines']:
