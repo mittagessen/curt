@@ -10,115 +10,8 @@ from typing import Tuple
 
 from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
 from curt.mix_transformer import mit_b0
-from curt.head import CurveFormerHead
+from curt.head import CurveFormerHead, SegmentationHead
 from curt.matcher import HungarianMatcher
-
-from curt.detr import DETR
-from curt.backbone import Backbone, Joiner
-from curt.transformer import Transformer
-from curt.position_encoding import PositionEmbeddingSine
-
-
-class DetrCurveModel(LightningModule):
-    def __init__(self,
-                 num_classes: int,
-                 num_queries: int = 200,
-                 learning_rate: float = 1e-4,
-                 learning_rate_backbone: float = 1e-5,
-                 weight_decay: float = 1e-4,
-                 lr_drop: int = 200,
-                 aux_loss: bool = True,
-                 match_cost_class: float = 1.0,
-                 match_cost_curve: float = 5.0,
-                 curve_loss_coef: float = 5.0,
-                 eos_coef: float = 0.1,
-                 hidden_dim: int = 256,
-                 dropout: float = 0.1,
-                 num_heads: int = 8,
-                 dim_ff: int = 2048,
-                 encoder_layers: int = 6,
-                 decoder_layers: int = 6,
-                 backbone: str = 'resnet50'):
-        super().__init__()
-
-        self.save_hyperparameters()
-
-        # building the backbone
-        resnet = Backbone(backbone, learning_rate_backbone > 0)
-        N_steps = hidden_dim // 2
-        position_embedding = PositionEmbeddingSine(N_steps, normalize=True)
-        bb = Joiner(resnet, position_embedding)
-        bb.num_channels = resnet.num_channels
-
-        # building transformer
-        transformer = Transformer(d_model=hidden_dim,
-                                  dropout=dropout,
-                                  nhead=num_heads,
-                                  dim_feedforward=dim_ff,
-                                  num_encoder_layers=encoder_layers,
-                                  num_decoder_layers=decoder_layers,
-                                  normalize_before=False,
-                                  return_intermediate_dec=True)
-
-        # assemble model
-        self.model = DETR(bb,
-                          transformer,
-                          num_classes=num_classes,
-                          num_queries=num_queries,
-                          aux_loss=aux_loss)
-
-        matcher = HungarianMatcher(cost_class=match_cost_class,
-                                   cost_curve=match_cost_curve)
-
-        weight_dict = {'loss_ce': 1, 'loss_curves': curve_loss_coef}
-
-        if aux_loss:
-            aux_weight_dict = {}
-            for i in range(decoder_layers - 1):
-                aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
-            weight_dict.update(aux_weight_dict)
-
-        losses = ['labels', 'curves', 'cardinality']
-
-        self.criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
-                                      eos_coef=eos_coef, losses=losses)
-    def training_step(self, batch, batch_idx):
-        samples, targets = batch
-        outputs = self.model(samples)
-        loss_dict = self.criterion(outputs, targets)
-        weight_dict = self.criterion.weight_dict
-        losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
-        self.log('loss', losses)
-        return losses
-
-    def validation_step(self, batch, batch_idx):
-        samples, targets = batch
-        outputs = self.model(samples)
-        loss_dict = self.criterion(outputs, targets)
-        weight_dict = self.criterion.weight_dict
-        loss_dict_scaled = {k: v * weight_dict[k]
-                            for k, v in loss_dict.items() if k in weight_dict}
-        loss_dict_unscaled = {f'{k}_unscaled': v
-                              for k, v in loss_dict.items()}
-        self.log_dict({'loss': sum(loss_dict_scaled.values()),
-                       'class_error': loss_dict['class_error'],
-                       **loss_dict_scaled,
-                       **loss_dict_unscaled})
-
-    def configure_optimizers(self):
-        param_dicts = [
-            {"params": [p for n, p in self.model.named_parameters() if "backbone" not in n and p.requires_grad]},
-            {
-                "params": [p for n, p in self.model.named_parameters() if "backbone" in n and p.requires_grad],
-                "lr": self.hparams.learning_rate_backbone,
-            },
-        ]
-        optimizer = torch.optim.AdamW(param_dicts,
-                                      lr=self.hparams.learning_rate,
-                                      weight_decay=self.hparams.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
-        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
-
 
 class CurtCurveModel(LightningModule):
     def __init__(self,
@@ -220,6 +113,48 @@ class Curt(nn.Module):
         features = self.transformer(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
         return self.head(features, mask)
+
+
+class MaskedCurt(nn.Module):
+    """ Curt with a mask on."""
+    def __init__(self, num_classes: int, num_queries: int, pretrained: bool = True):
+        """ Initializes the model.
+        Parameters:
+            backbone: torch module of the backbone to be used. See backbone.py
+            transformer: torch module of the transformer architecture. See transformer.py
+            num_classes: number of object classes
+            num_queries: number of object queries, ie detection slot. This is the maximal number of objects
+                         DETR can detect in a single image. For COCO, we recommend 100 queries.
+            pretrained: Load pretrained weights for encoder.
+        """
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_queries = num_queries
+        self.transformer = mit_b0(pretrained=pretrained)
+
+        _curve_head = CurveFormerHead(in_channels=self.transformer.embed_dims,
+                                      num_queries=num_queries,
+                                      num_classes=num_classes)
+        self.mask_head = SegmentationHead(_curve_head, freeze_curt=True)
+
+    def forward(self, samples: NestedTensor):
+        """ The forward expects a NestedTensor, which consists of:
+               - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
+               - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
+
+            It returns a dict with the following elements:
+               - "pred_logits": the classification logits (including no-object) for all queries.
+                                Shape= [batch_size x num_queries x (num_classes + 1)]
+               - "pred_curves": The normalized curve control points for all queries, represented as
+                                (x0, y0, x1, y1, x2, y2, x3, y3). These values are normalized in [0, 1],
+                                relative to the size of each individual image (disregarding possible padding).
+               - "pred_masks":  The instance segmentation masks for each detected baseline.
+        """
+        if isinstance(samples, (list, torch.Tensor)):
+            samples = nested_tensor_from_tensor_list(samples)
+        features = self.transformer(samples.tensors)
+        mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
+        return self.mask_head(features, mask)
 
 
 class SetCriterion(nn.Module):

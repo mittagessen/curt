@@ -199,12 +199,11 @@ class OverlapPatchEmbed(nn.Module):
 
 
 class MixVisionTransformer(nn.Module):
-    def __init__(self, img_size=(1200, 800), in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512],
+    def __init__(self, img_size=(1200, 800), in_chans=3, embed_dims=[64, 128, 256, 512],
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
-                 depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], num_queries=200):
+                 depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1]):
         super().__init__()
-        self.num_classes = num_classes
         self.depths = depths
         self.embed_dims = embed_dims
 

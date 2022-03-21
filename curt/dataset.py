@@ -26,7 +26,8 @@ class CurveDataModule(pl.LightningDataModule):
                  merge_baselines: Dict[str, Sequence[str]] = None,
                  max_lines: int = 400,
                  batch_size: int = 2,
-                 num_workers: int = 2):
+                 num_workers: int = 2,
+                 masks: bool = False):
         super().__init__()
 
         self.save_hyperparameters()
@@ -99,20 +100,23 @@ class BaselineSet(Dataset):
                  valid_baselines: Sequence[str] = None,
                  merge_baselines: Dict[str, Sequence[str]] = None,
                  max_lines: int = 400,
-                 class_mapping: Optional[Dict[str, int]] = None):
+                 class_mapping: Optional[Dict[str, int]] = None,
+                 masks: bool = False):
         """
         Reads a list of image-json pairs and creates a data set.
 
         Args:
             imgs (list):
             target_size (tuple): Target size of the image as a (height, width) tuple.
-            valid_baselines (list): Sequence of valid baseline identifiers. If
-                                    `None` all are valid.
-            merge_baselines (dict): Sequence of baseline identifiers to merge.
-                                    Note that merging occurs after entities not
-                                    in valid_* have been discarded.
-            max_lines (int): Threshold for maximum number of lines in input
-                             documents. Pages with more lines will be discarded.
+            valid_baselines: Sequence of valid baseline identifiers. If `None`
+                             all are valid.
+            merge_baselines: Sequence of baseline identifiers to merge.  Note
+                             that merging occurs after entities not in valid_*
+                             have been discarded.
+            max_lines: Threshold for maximum number of lines in input
+                       documents. Pages with more lines will be discarded.
+            class_mapping: Explicit mapping of type identifiers and class indices.
+            masks: Returns line bounding boxes in addition to baselines.
         """
         super().__init__()
         self.im_mode = '1'
@@ -123,6 +127,7 @@ class BaselineSet(Dataset):
         self.mbl_dict = merge_baselines if merge_baselines is not None else {}
         self.max_lines_per_page = -1
         self.valid_baselines = valid_baselines
+        self.masks = masks
         im_paths = []
         self.targets = []
 
@@ -144,9 +149,14 @@ class BaselineSet(Dataset):
                         if len(baseline) < 8:
                             ls = LineString(baseline)
                             baseline = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
-                        # control points normalized to image size
-                        #control_pts = np.concatenate(([baseline[0]], bezier_fit(baseline), [baseline[-1]])).flatten().tolist()
-                        curves.append((self.class_mapping[self.mbl_dict.get(tag, tag)], baseline))
+                        if self.masks:
+                            line_masks = np.array(line['boundary'])
+                            curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
+                                           'baseline': baseline,
+                                           'mask': line_masks})
+                        else:
+                            curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
+                                           'baseline': baseline})
                         self.class_stats['baselines'][self.mbl_dict.get(tag, tag)] += 1
             if len(curves) > max_lines:
                 continue

@@ -11,9 +11,10 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as F
 
 from scipy.special import comb
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 
 from shapely.ops import clip_by_rect
+
 
 # done
 def crop(image, target, region):
@@ -25,9 +26,14 @@ def crop(image, target, region):
 
     curves = []
     for curve in target:
-        res = clip_by_rect(LineString(curve[1]), j, i, j+w, i+h)
-        if res.type == 'LineString' and res.length:
-            curves.append((curve[0], np.array(res.coords)-[j, i]))
+        line = clip_by_rect(LineString(curve['baseline']), j, i, j+w, i+h)
+        if 'mask' in curve:
+            mask  = clip_by_rect(Polygon(curve['mask']), j, i, j+w, i+h)
+        if line.type == 'LineString' and line.length and ('mask' not in curve or (mask.type == 'Polygon' and mask.area > 0)):
+            curves.append({'tag': curve['tag'],
+                           'baseline': np.array(line.coords)-[j, i]})
+            if 'mask' in curve:
+                curves[-1]['mask'] = mask
 
     return cropped_image, curves
 
@@ -40,9 +46,11 @@ def hflip(image, target):
     target = target.copy()
     curves = []
     for curve in target:
-        curves.append((curve[0], curve[1] * [-1, 1] + [w, 0]))
-
-    return flipped_image, target
+        curves.append({'tag': curve['tag'],
+                       'baseline': curve['baseline'] * [-1, 1] + [w, 0]})
+        if 'mask' in curve:
+            curves[-1]['mask'] = curve['mask'] * [-1, 1] + [w, 0]
+    return flipped_image, curves
 
 # done
 def resize(image, target, size, max_size=None):
@@ -86,7 +94,10 @@ def resize(image, target, size, max_size=None):
     target = target.copy()
     curves = []
     for curve in target:
-        curves.append((curve[0], curve[1] * [ratio_width, ratio_height]))
+        curves.append({'tag': curve['tag'],
+                       'baseline': curve['baseline'] * [ratio_width, ratio_height]})
+        if 'mask' in curve:
+            curves[-1]['mask'] = curve['mask'] * [ratio_width, ratio_height]
 
     return rescaled_image, curves
 
@@ -132,7 +143,6 @@ class CenterCrop(object):
         return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
 
 
-# done
 class RandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
@@ -143,7 +153,6 @@ class RandomHorizontalFlip(object):
         return img, target
 
 
-# done
 class RandomResize(object):
     def __init__(self, sizes, max_size=None):
         assert isinstance(sizes, (list, tuple))
@@ -154,7 +163,6 @@ class RandomResize(object):
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
 
-# done
 class RandomPad(object):
     def __init__(self, max_pad):
         self.max_pad = max_pad
@@ -164,7 +172,6 @@ class RandomPad(object):
         pad_y = random.randint(0, self.max_pad)
         return pad(img, target, (pad_x, pad_y))
 
-# done
 class RandomSelect(object):
     """
     Randomly selects between transforms1 and transforms2,
@@ -180,12 +187,10 @@ class RandomSelect(object):
             return self.transforms1(img, target)
         return self.transforms2(img, target)
 
-# done
 class ToTensor(object):
     def __call__(self, img, target):
         return F.to_tensor(img), target
 
-# done
 class RandomErasing(object):
 
     def __init__(self, *args, **kwargs):
@@ -194,7 +199,6 @@ class RandomErasing(object):
     def __call__(self, img, target):
         return self.eraser(img), target
 
-# done
 class Normalize(object):
     def __init__(self, mean, std):
         self.mean = mean
@@ -250,17 +254,27 @@ class BezierFit(object):
         else:
             im_size = tuple(image.shape[1:][::-1])
 
-        for line in target:
-            label, curve = line
+        masks = None
+        if len(target) and 'mask' in target[0]:
+            masks = torch.zeros((len(target),) + im_size[::-1])
+        for idx, line in enumerate(target):
+            label, curve = line['tag'], line['baseline']
             if len(curve) < self.min_points:
                 ls = LineString(curve)
                 curve = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
             # control points normalized to image size
             curves.append((np.concatenate(([curve[0]], bezier_fit(curve), [curve[-1]]))/im_size).flatten().tolist())
+            # create pixel map for this line
+            if 'mask' in line:
+                rr, cc = polygon(line['mask'][:, 1], line['mask'][:, 0], shape=im_size[::-1])
+                masks[idx, rr, cc] = 1
             labels.append(label)
-        return image, {'labels': torch.LongTensor(labels), 'curves': torch.Tensor(curves) if curves else torch.zeros((0, 8))}
+        ttarget = {'labels': torch.LongTensor(labels),
+                   'curves': torch.Tensor(curves) if curves else torch.zeros((0, 8))}
+        if masks:
+            ttarget['masks'] = masks
+        return image, ttarget
 
-# done
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms

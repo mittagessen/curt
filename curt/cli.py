@@ -82,11 +82,104 @@ def cli(ctx, verbose, seed):
     ctx.meta['verbose'] = verbose
     set_logger(logger, level=30 - min(10 * verbose, 20))
 
+@cli.command('polytrain')
+@click.pass_context
+@click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
+@click.option('-B', '--batch-size', default=2, help='Batch size')
+@click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
+@click.option('-N', '--epochs', default=25, help='Number of epochs to train for')
+@click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
+              help='Model saving and report generation frequency in epochs '
+                   'during training. If frequency is >1 it must be an integer, '
+                   'i.e. running validation every n-th epoch.')
+@click.option('-lr-drop', '--lr-drop', default=15, help='Reduction factor of learning rate over time')
+@click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
+@click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
+@click.option('--mask-loss-coef', default=1.0, help='Mask loss coefficient')
+@click.option('--dice-loss-coef', default=1.0, help='Mask dice loss coefficient')
+@click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
+@click.option('-o', '--output', show_default=True, type=click.Path(), default='curt_model', help='Pytorch lightning output directory')
+@click.option('-p', '--partition', show_default=True, default=0.9,
+              help='Ground truth data partition ratio between train/validation set')
+@click.option('-t', '--training-files', show_default=True, default=None, multiple=True,
+              callback=_validate_manifests, type=click.File(mode='r', lazy=True),
+              help='File(s) with additional paths to training data')
+@click.option('-e', '--evaluation-files', show_default=True, default=None, multiple=True,
+              callback=_validate_manifests, type=click.File(mode='r', lazy=True),
+              help='File(s) with paths to evaluation data. Overrides the `-p` parameter')
+@click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
+@click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
+@click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
+def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
+        clip_max_norm, dropout, mask_loss_coef, dice_loss_coef, load, output,
+        partition, training_files, evaluation_files, workers, device,
+        ground_truth):
+
+    if evaluation_files:
+        partition = 1
+    ground_truth = list(ground_truth)
+
+    if training_files:
+        ground_truth.extend(training_files)
+
+    if len(ground_truth) == 0:
+        raise click.UsageError('No training data was provided to the train command. Use `-t` or the `ground_truth` argument.')
+
+    if device == 'cpu':
+        device = None
+    elif device.startswith('cuda'):
+        device = [int(device.split(':')[-1])]
+
+    if freq > 1:
+        val_check_interval = {'check_val_every_n_epoch': int(freq)}
+    else:
+        val_check_interval = {'val_check_interval': freq}
+
+    if not valid_baselines:
+        valid_baselines = None
+
+    data_module = CurveDataModule(train_files=ground_truth,
+                                  val_files=evaluation_files,
+                                  partition=partition,
+                                  valid_baselines=valid_baselines,
+                                  merge_baselines=merge_baselines,
+                                  max_lines=num_queries,
+                                  batch_size=batch_size,
+                                  num_workers=workers)
+
+    if load:
+        model = CurtCurveModel.load_from_checkpoint(load)
+    else:
+        model = CurtCurveModel(data_module.num_classes+1,
+                               num_queries=num_queries,
+                               learning_rate=learning_rate,
+                               weight_decay=weight_decay,
+                               lr_drop=lr_drop,
+                               match_cost_class=match_cost_class,
+                               match_cost_curve=match_cost_curve,
+                               curve_loss_coef=curve_loss_coef,
+                               eos_coef=eos_coef,
+                               hidden_dim=hidden_dim,
+                               dropout=dropout,
+                               num_heads=num_heads,
+                               dim_ff=dim_ff)
+
+    checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
+
+    trainer = Trainer(default_root_dir=output,
+                      gradient_clip_val=clip_max_norm,
+                      max_epochs=epochs,
+                      gpus=device,
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb],
+                      **val_check_interval)
+
+    trainer.fit(model, data_module)
+
+
 
 @cli.command('train')
 @click.pass_context
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
-@click.option('-lr-bb', '--learning-rate-backbone', default=1e-5, help='Backbone learning rate')
 @click.option('-B', '--batch-size', default=2, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
 @click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
@@ -96,8 +189,6 @@ def cli(ctx, verbose, seed):
                    'i.e. running validation every n-th epoch.')
 @click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
 @click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
-@click.option('--train-mask-head/--no-train-mask-head', default=False, help='Flag to enable/disable training of the mask head. Pretrained weights must be loaded for this feature')
-@click.option('--backbone', default='resnet50', type=click.Choice(['resnet18', 'resnet34', 'resnet50']), help='Type of network to use for feature extractor')
 @click.option('-el', '--encoder-layers', default=6, help='Number of encoder layers in the transformer')
 @click.option('-dl', '--decoder-layers', default=6, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
@@ -120,10 +211,6 @@ def cli(ctx, verbose, seed):
 @click.option('-e', '--evaluation-files', show_default=True, default=None, multiple=True,
               callback=_validate_manifests, type=click.File(mode='r', lazy=True),
               help='File(s) with paths to evaluation data. Overrides the `-p` parameter')
-@click.option('--augment/--no-augment',
-              show_default=True,
-              default=False,
-              help='Enable image augmentation')
 @click.option('-vb', '--valid-baselines', show_default=True, default=None, multiple=True,
               help='Valid baseline types in training data. May be used multiple times.')
 @click.option('-mb',
@@ -136,13 +223,12 @@ def cli(ctx, verbose, seed):
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def train(ctx, learning_rate, learning_rate_backbone, batch_size, weight_decay,
-          epochs, freq, lr_drop, clip_max_norm, train_mask_head, backbone,
-          encoder_layers, decoder_layers, dim_ff, hidden_dim, dropout,
-          num_heads, num_queries, aux_loss, match_cost_class, match_cost_curve,
-          curve_loss_coef, eos_coef, load, output, partition, training_files,
-          evaluation_files, augment, valid_baselines, merge_baselines, workers,
-          device, ground_truth):
+def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
+          clip_max_norm, encoder_layers, decoder_layers, dim_ff, hidden_dim,
+          dropout, num_heads, num_queries, aux_loss, match_cost_class,
+          match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
+          training_files, evaluation_files, valid_baselines, merge_baselines,
+          workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
