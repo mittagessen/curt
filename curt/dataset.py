@@ -46,7 +46,7 @@ class CurveDataModule(pl.LightningDataModule):
                                                      tf.RandomResize(scales, max_size=1333),
                                                  ])
                                              ),
-                                             tf.PhotoMetricDistortion(),
+                                             tf.PhotometricDistortion(),
                                              normalize,
                                          ])
 

@@ -15,6 +15,11 @@ import math
 
 
 weight_b0_path = pkg_resources.resource_filename(__name__, 'b0.pth')
+weight_b1_path = pkg_resources.resource_filename(__name__, 'b1.pth')
+weight_b2_path = pkg_resources.resource_filename(__name__, 'b2.pth')
+weight_b3_path = pkg_resources.resource_filename(__name__, 'b3.pth')
+weight_b4_path = pkg_resources.resource_filename(__name__, 'b4.pth')
+weight_b5_path = pkg_resources.resource_filename(__name__, 'b5.pth')
 
 
 class Mlp(nn.Module):
@@ -362,6 +367,8 @@ class mit_b1(MixVisionTransformer):
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1, **kwargs)
+        if pretrained:
+            self.load_state_dict(torch.load(weight_b1_path))
 
 
 class mit_b2(MixVisionTransformer):
@@ -370,6 +377,8 @@ class mit_b2(MixVisionTransformer):
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1, **kwargs)
+        if pretrained:
+            self.load_state_dict(torch.load(weight_b2_path))
 
 
 class mit_b3(MixVisionTransformer):
@@ -378,6 +387,8 @@ class mit_b3(MixVisionTransformer):
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1, **kwargs)
+        if pretrained:
+            self.load_state_dict(torch.load(weight_b3_path))
 
 
 class mit_b4(MixVisionTransformer):
@@ -386,6 +397,8 @@ class mit_b4(MixVisionTransformer):
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1, **kwargs)
+        if pretrained:
+            self.load_state_dict(torch.load(weight_b4_path))
 
 
 class mit_b5(MixVisionTransformer):
@@ -394,3 +407,5 @@ class mit_b5(MixVisionTransformer):
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1, **kwargs)
+        if pretrained:
+            self.load_state_dict(torch.load(weight_b5_path))

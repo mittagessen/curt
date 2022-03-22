@@ -33,14 +33,14 @@ class PhotometricDistortion(object):
         self.hue_delta = hue_delta
 
     @classmethod
-    def convert(img, alpha=1, beta=0):
+    def convert(cls, img, alpha=1, beta=0):
         img = img.astype(np.float32) * alpha + beta
         img = np.clip(img, 0, 255)
         return img.astype(np.uint8)
 
     def brightness(self, img):
         """Brightness distortion."""
-        if random.randint(2):
+        if random.randint(0, 1):
             return self.convert(
                 img,
                 beta=random.uniform(-self.brightness_delta,
@@ -49,13 +49,13 @@ class PhotometricDistortion(object):
 
     def contrast(self, img):
         """Contrast distortion."""
-        if random.randint(2):
+        if random.randint(0, 1):
             return self.convert(img, alpha=random.uniform(self.contrast_lower, self.contrast_upper))
         return img
 
     def saturation(self, img):
         """Saturation distortion."""
-        if random.randint(2):
+        if random.randint(0, 1):
             img = rgb2hsv(img)
             img[:, :, 1] = self.convert(
                 img[:, :, 1],
@@ -66,7 +66,7 @@ class PhotometricDistortion(object):
 
     def hue(self, img):
         """Hue distortion."""
-        if random.randint(2):
+        if random.randint(0, 1):
             img = rgb2hsv(img)
             img[:, :, 0] = (img[:, :, 0].astype(int) + random.randint(-self.hue_delta, self.hue_delta)) % 180
             img = hsv2rgb(img)
@@ -76,13 +76,16 @@ class PhotometricDistortion(object):
         """
         Call function to perform photometric distortion on images.
         """
+        if isinstance(image, PIL.Image.Image):
+            image = np.array(image)
 
+        print(f'before: {image.max()}')
         # random brightness
         image = self.brightness(image)
 
         # mode == 0 --> do random contrast first
         # mode == 1 --> do random contrast last
-        mode = random.randint(2)
+        mode = random.randint(0, 1)
         if mode == 1:
             image = self.contrast(image)
 
@@ -96,7 +99,9 @@ class PhotometricDistortion(object):
         if mode == 0:
             image = self.contrast(image)
 
-        return image, targets
+        print(f'after: {image.max()}')
+
+        return image, target
 
 
 def crop(image, target, region):
