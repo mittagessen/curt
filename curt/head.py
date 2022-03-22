@@ -119,15 +119,10 @@ class SegmentationHead(nn.Module):
     A combined bezier curve and segmentation prediction head.
     """
     def __init__(self,
-                 curve_head: CurveFormerHead,
-                 freeze_curt: bool = True):
+                 curve_head: CurveFormerHead):
         super().__init__()
 
         self.curve_head = curve_head
-
-        if freeze_curt:
-            for p in self.curve_head.parameters():
-                p.requires_grad_(False)
 
         hidden_dim = self.curve_head.embedding_dim
         num_heads = self.curve_head.num_heads

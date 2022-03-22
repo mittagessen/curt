@@ -95,6 +95,10 @@ def cli(ctx, verbose, seed):
 @click.option('-lr-drop', '--lr-drop', default=15, help='Reduction factor of learning rate over time')
 @click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
+@click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
+@click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
+@click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
+@click.option('--eos-coef', default=0.1, help='Relative classification weight of the no-object class')
 @click.option('--mask-loss-coef', default=1.0, help='Mask loss coefficient')
 @click.option('--dice-loss-coef', default=1.0, help='Mask dice loss coefficient')
 @click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
@@ -111,8 +115,9 @@ def cli(ctx, verbose, seed):
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-        clip_max_norm, dropout, mask_loss_coef, dice_loss_coef, load, output,
-        partition, training_files, evaluation_files, workers, device,
+        clip_max_norm, dropout, match_cost_class, match_cost_curve,
+        curve_loss_coef, eos_coef, mask_loss_coef, dice_loss_coef, load,
+        output, partition, training_files, evaluation_files, workers, device,
         ground_truth):
 
     if evaluation_files:
@@ -145,24 +150,23 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   merge_baselines=merge_baselines,
                                   max_lines=num_queries,
                                   batch_size=batch_size,
-                                  num_workers=workers)
+                                  num_workers=workers,
+                                  masks=True)
 
     if load:
-        model = CurtCurveModel.load_from_checkpoint(load)
+        curt_model = CurtCurveModel.load_from_checkpoint(load).model
+        model = MaskedCurtCurveModel(curt_model,
+                                     learning_rate=learning_rate,
+                                     weight_decay=weight_decay,
+                                     lr_drop=lr_drop,
+                                     match_cost_class=match_cost_class,
+                                     match_cost_curve=match_cost_curve,
+                                     curve_loss_coef=curve_loss_coef,
+                                     mask_loss_coef=mask_loss_coef,
+                                     dice_loss_coef=dice_loss_coef,
+                                     eos_coef=eos_coef)
     else:
-        model = CurtCurveModel(data_module.num_classes+1,
-                               num_queries=num_queries,
-                               learning_rate=learning_rate,
-                               weight_decay=weight_decay,
-                               lr_drop=lr_drop,
-                               match_cost_class=match_cost_class,
-                               match_cost_curve=match_cost_curve,
-                               curve_loss_coef=curve_loss_coef,
-                               eos_coef=eos_coef,
-                               hidden_dim=hidden_dim,
-                               dropout=dropout,
-                               num_heads=num_heads,
-                               dim_ff=dim_ff)
+        raise click.UsageError('No pretrained weights given for mask head training.')
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 

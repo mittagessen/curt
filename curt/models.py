@@ -13,6 +13,7 @@ from curt.mix_transformer import mit_b0
 from curt.head import CurveFormerHead, SegmentationHead
 from curt.matcher import HungarianMatcher
 
+
 class CurtCurveModel(LightningModule):
     def __init__(self,
                  num_classes: int,
@@ -115,6 +116,71 @@ class Curt(nn.Module):
         return self.head(features, mask)
 
 
+class MaskedCurtCurveModel(LightningModule):
+    def __init__(self,
+                 curt: nn.Module,
+                 learning_rate: float = 1e-4,
+                 weight_decay: float = 1e-4,
+                 lr_drop: int = 15,
+                 match_cost_class: float = 1.0,
+                 match_cost_curve: float = 5.0,
+                 curve_loss_coef: float = 5.0,
+                 mask_loss_coef: float = 1.0,
+                 dice_loss_coef: float = 1.0,
+                 eos_coef: float = 0.1):
+        super().__init__()
+
+        self.save_hyperparameters()
+
+        self.model = MaskedCurt(num_classes=curt.num_classes, num_queries=curt.num_queries)
+        self.model.load_state_dict(curt.state_dict(), strict=False)
+        self.model.reinit_mask_head()
+
+        matcher = HungarianMatcher(cost_class=match_cost_class,
+                                   cost_curve=match_cost_curve)
+
+        weight_dict = {'loss_ce': 1,
+                       'loss_curves': curve_loss_coef,
+                       'loss_mask': mask_loss_coef,
+                       'loss_dice': dice_loss_coef}
+
+        losses = ['labels', 'curves', 'cardinality', 'masks']
+
+        self.criterion = SetCriterion(curt.num_classes, matcher=matcher, weight_dict=weight_dict,
+                                      eos_coef=eos_coef, losses=losses)
+
+
+    def training_step(self, batch, batch_idx):
+        samples, targets = batch
+        outputs = self.model(samples)
+        loss_dict = self.criterion(outputs, targets)
+        weight_dict = self.criterion.weight_dict
+        losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+        self.log('loss', losses)
+        return losses
+
+    def validation_step(self, batch, batch_idx):
+        samples, targets = batch
+        outputs = self.model(samples)
+        loss_dict = self.criterion(outputs, targets)
+        weight_dict = self.criterion.weight_dict
+        loss_dict_scaled = {k: v * weight_dict[k]
+                            for k, v in loss_dict.items() if k in weight_dict}
+        loss_dict_unscaled = {f'{k}_unscaled': v
+                              for k, v in loss_dict.items()}
+        self.log_dict({'loss': sum(loss_dict_scaled.values()),
+                       'class_error': loss_dict['class_error'],
+                       **loss_dict_scaled,
+                       **loss_dict_unscaled})
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.model.parameters(),
+                                      lr=self.hparams.learning_rate,
+                                      weight_decay=self.hparams.weight_decay)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
+        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+
+
 class MaskedCurt(nn.Module):
     """ Curt with a mask on."""
     def __init__(self, num_classes: int, num_queries: int, pretrained: bool = True):
@@ -131,11 +197,16 @@ class MaskedCurt(nn.Module):
         self.num_classes = num_classes
         self.num_queries = num_queries
         self.transformer = mit_b0(pretrained=pretrained)
+        for p in self.transformer.parameters():
+            p.requires_grad_(False)
 
-        _curve_head = CurveFormerHead(in_channels=self.transformer.embed_dims,
-                                      num_queries=num_queries,
-                                      num_classes=num_classes)
-        self.mask_head = SegmentationHead(_curve_head, freeze_curt=True)
+        self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
+                                    num_queries=num_queries,
+                                    num_classes=num_classes)
+
+        for p in self.head.parameters():
+            p.requires_grad_(False)
+        self.mask_head = SegmentationHead(self.head)
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -155,6 +226,9 @@ class MaskedCurt(nn.Module):
         features = self.transformer(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
         return self.mask_head(features, mask)
+
+    def reinit_mask_head(self):
+        self.mask_head = SegmentationHead(self.head)
 
 
 class SetCriterion(nn.Module):
