@@ -56,7 +56,8 @@ class CurveDataModule(pl.LightningDataModule):
                                 self._train_transforms,
                                 valid_baselines=self.hparams.valid_baselines,
                                 merge_baselines=self.hparams.merge_baselines,
-                                max_lines=self.hparams.max_lines)
+                                max_lines=self.hparams.max_lines,
+                                masks=masks)
 
         if self.hparams.val_files:
             val_set = BaselineSet(self.hparams.val_files,
@@ -64,7 +65,8 @@ class CurveDataModule(pl.LightningDataModule):
                                   valid_baselines=self.hparams.valid_baselines,
                                   merge_baselines=self.hparams.merge_baselines,
                                   max_lines=self.hparams.max_lines,
-                                  class_mapping=train_set.class_mapping)
+                                  class_mapping=train_set.class_mapping,
+                                  masks=masks)
 
             train_set = Subset(train_set, range(len(train_set)))
             val_set = Subset(val_set, range(len(val_set)))

@@ -15,7 +15,7 @@ from rich.logging import RichHandler
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from curt.models import CurtCurveModel
+from curt.models import CurtCurveModel, MaskedCurtCurveModel
 from curt.dataset import CurveDataModule
 from curt.progress import KrakenTrainProgressBar
 
@@ -111,14 +111,23 @@ def cli(ctx, verbose, seed):
 @click.option('-e', '--evaluation-files', show_default=True, default=None, multiple=True,
               callback=_validate_manifests, type=click.File(mode='r', lazy=True),
               help='File(s) with paths to evaluation data. Overrides the `-p` parameter')
+@click.option('-vb', '--valid-baselines', show_default=True, default=None, multiple=True,
+              help='Valid baseline types in training data. May be used multiple times.')
+@click.option('-mb',
+              '--merge-baselines',
+              show_default=True,
+              default=None,
+              help='Baseline type merge mapping. Same syntax as `--merge-regions`',
+              multiple=True,
+              callback=_validate_merging)
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
         clip_max_norm, dropout, match_cost_class, match_cost_curve,
         curve_loss_coef, eos_coef, mask_loss_coef, dice_loss_coef, load,
-        output, partition, training_files, evaluation_files, workers, device,
-        ground_truth):
+        output, partition, training_files, evaluation_files, valid_baselines,
+        merge_baselines, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -143,15 +152,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
     if not valid_baselines:
         valid_baselines = None
 
-    data_module = CurveDataModule(train_files=ground_truth,
-                                  val_files=evaluation_files,
-                                  partition=partition,
-                                  valid_baselines=valid_baselines,
-                                  merge_baselines=merge_baselines,
-                                  max_lines=num_queries,
-                                  batch_size=batch_size,
-                                  num_workers=workers,
-                                  masks=True)
+
 
     if load:
         curt_model = CurtCurveModel.load_from_checkpoint(load).model
@@ -167,6 +168,16 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                      eos_coef=eos_coef)
     else:
         raise click.UsageError('No pretrained weights given for mask head training.')
+
+    data_module = CurveDataModule(train_files=ground_truth,
+                                  val_files=evaluation_files,
+                                  partition=partition,
+                                  valid_baselines=valid_baselines,
+                                  merge_baselines=merge_baselines,
+                                  max_lines=curt_model.num_queries,
+                                  batch_size=batch_size,
+                                  num_workers=workers,
+                                  masks=True)
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 

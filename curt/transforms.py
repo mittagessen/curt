@@ -14,7 +14,7 @@ from scipy.special import comb
 from shapely.geometry import LineString, Polygon
 
 from shapely.ops import clip_by_rect
-
+from skimage.draw import polygon
 
 # done
 def crop(image, target, region):
@@ -33,7 +33,7 @@ def crop(image, target, region):
             curves.append({'tag': curve['tag'],
                            'baseline': np.array(line.coords)-[j, i]})
             if 'mask' in curve:
-                curves[-1]['mask'] = mask
+                curves[-1]['mask'] = np.array(mask.boundary.coords)-[j, i]
 
     return cropped_image, curves
 
@@ -271,7 +271,7 @@ class BezierFit(object):
             labels.append(label)
         ttarget = {'labels': torch.LongTensor(labels),
                    'curves': torch.Tensor(curves) if curves else torch.zeros((0, 8))}
-        if masks:
+        if masks is not None:
             ttarget['masks'] = masks
         return image, ttarget
 

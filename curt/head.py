@@ -211,9 +211,7 @@ class MaskHeadSmallConv(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x: Tensor, curve_mask: Tensor, fpns: List[Tensor]):
-        print(x.shape)
         x = torch.cat([_expand(x, curve_mask.shape[1]), curve_mask.flatten(0, 1)], 1)
-        print(x.shape)
         x = self.lay1(x)
         x = self.gn1(x)
         x = F.relu(x)
