@@ -56,20 +56,20 @@ class PhotometricDistortion(object):
     def saturation(self, img):
         """Saturation distortion."""
         if random.randint(0, 1):
-            img = rgb2hsv(img)
+            img = (rgb2hsv(img)*255).astype('uint8')
             img[:, :, 1] = self.convert(
                 img[:, :, 1],
                 alpha=random.uniform(self.saturation_lower,
                                      self.saturation_upper))
-            img = hsv2rgb(img)
+            img = (hsv2rgb(img/255)*255).astype('uint8')
         return img
 
     def hue(self, img):
         """Hue distortion."""
         if random.randint(0, 1):
-            img = rgb2hsv(img)
+            img = (rgb2hsv(img)*255).astype('uint8')
             img[:, :, 0] = (img[:, :, 0].astype(int) + random.randint(-self.hue_delta, self.hue_delta)) % 180
-            img = hsv2rgb(img)
+            img = (hsv2rgb(img/255)*255).astype('uint8')
         return img
 
     def __call__(self, image, target):
@@ -79,7 +79,6 @@ class PhotometricDistortion(object):
         if isinstance(image, PIL.Image.Image):
             image = np.array(image)
 
-        print(f'before: {image.max()}')
         # random brightness
         image = self.brightness(image)
 
@@ -98,8 +97,6 @@ class PhotometricDistortion(object):
         # random contrast
         if mode == 0:
             image = self.contrast(image)
-
-        print(f'after: {image.max()}')
 
         return image, target
 
