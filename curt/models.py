@@ -9,7 +9,7 @@ from pytorch_lightning import LightningModule
 from typing import Tuple
 
 from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
-from curt.mix_transformer import mit_b0
+from curt import mix_transformer
 from curt.head import CurveFormerHead, SegmentationHead
 from curt.matcher import HungarianMatcher
 
@@ -28,12 +28,14 @@ class CurtCurveModel(LightningModule):
                  hidden_dim: int = 256,
                  dropout: float = 0.1,
                  num_heads: int = 8,
-                 dim_ff: int = 2048):
+                 dim_ff: int = 2048,
+                 decoder_layers: int = 3,
+                 decoder = 'mit_b0'):
         super().__init__()
 
         self.save_hyperparameters()
 
-        self.model = Curt(num_queries=num_queries, num_classes=num_classes)
+        self.model = Curt(num_queries=num_queries, num_classes=num_classes, decoder=decoder, )
 
         matcher = HungarianMatcher(cost_class=match_cost_class,
                                    cost_curve=match_cost_curve)
@@ -78,7 +80,7 @@ class CurtCurveModel(LightningModule):
 
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, num_classes: int, num_queries: int, pretrained: bool = True):
+    def __init__(self, num_classes: int, num_queries: int, num_decoder_layers: int, encoder: str = 'mit_b0', pretrained: bool = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -86,16 +88,22 @@ class Curt(nn.Module):
             num_classes: number of object classes
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
+            num_decoder_layers: Number of decoder transformer layers.
+            encoder: Encoder architecture. Might be one of `mit_b0` to `mit_b5`.
             pretrained: Load pretrained weights for encoder.
         """
         super().__init__()
         self.num_classes = num_classes
         self.num_queries = num_queries
-        self.transformer = mit_b0(pretrained=pretrained)
+        self.num_decoder_layers = num_decoder_layers
+        self.encoder = encoder
+
+        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
 
         self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
                                     num_queries=num_queries,
-                                    num_classes=num_classes)
+                                    num_classes=num_classes,
+                                    num_decoder_layers=num_decoder_layers)
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:

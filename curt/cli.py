@@ -204,14 +204,13 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                    'i.e. running validation every n-th epoch.')
 @click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
 @click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
-@click.option('-el', '--encoder-layers', default=6, help='Number of encoder layers in the transformer')
-@click.option('-dl', '--decoder-layers', default=6, help='Number of decoder layers in the transformer')
+@click.option('--encoder', default='mit_b0', type=click.Choice(['mit_b0', 'mit_b1', 'mit_b2', 'mit_b3', 'mit_b4', 'mit_b5']), help='Encoding max transformers architecture')
+@click.option('-dl', '--decoder-layers', default=3, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
 @click.option('-hdd', '--hidden-dim', default=256, help='Size of the embeddings (dimension of the transformer')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
 @click.option('-nh', '--num-heads', default=8, help="Number of attention heads inside the transformer's attentions")
 @click.option('-nq', '--num-queries', default=500, help='Number of query slots (#lines + #regions detectable in an image)')
-@click.option('--aux-loss/--no-aux-loss', default=True, help='Flag for auxiliary decoding losses (loss at each layer)')
 @click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
 @click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
 @click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
@@ -239,8 +238,8 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-          clip_max_norm, encoder_layers, decoder_layers, dim_ff, hidden_dim,
-          dropout, num_heads, num_queries, aux_loss, match_cost_class,
+          clip_max_norm, encoder, decoder_layers, dim_ff, hidden_dim,
+          dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
           workers, device, ground_truth):
@@ -292,7 +291,9 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                hidden_dim=hidden_dim,
                                dropout=dropout,
                                num_heads=num_heads,
-                               dim_ff=dim_ff)
+                               dim_ff=dim_ff,
+                               encoder=encoder,
+                               decoder_layers=decoder_layers)
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
