@@ -13,7 +13,7 @@ from PIL import Image
 from pathlib import Path
 from rich.logging import RichHandler
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
 
 from curt.models import CurtCurveModel, MaskedCurtCurveModel
 from curt.dataset import CurveDataModule
@@ -185,7 +185,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                       gradient_clip_val=clip_max_norm,
                       max_epochs=epochs,
                       gpus=device,
-                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb],
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging()],
                       **val_check_interval)
 
     trainer.fit(model, data_module)
@@ -300,7 +300,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                       gradient_clip_val=clip_max_norm,
                       max_epochs=epochs,
                       gpus=device,
-                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb],
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging()],
                       **val_check_interval)
 
     trainer.fit(model, data_module)
