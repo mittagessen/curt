@@ -37,8 +37,7 @@ class CurveDataModule(pl.LightningDataModule):
                                 tf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
                                 tf.BezierFit()])
 
-        self._train_transforms = tf.Compose([tf.RandomHorizontalFlip(),
-                                             tf.RandomSelect(
+        self._train_transforms = tf.Compose([tf.RandomSelect(
                                                  tf.RandomResize(scales, max_size=1333),
                                                  tf.Compose([
                                                      tf.RandomResize([400, 500, 600]),
