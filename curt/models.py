@@ -35,7 +35,7 @@ class CurtCurveModel(LightningModule):
 
         self.save_hyperparameters()
 
-        self.model = Curt(num_queries=num_queries, num_classes=num_classes, decoder=decoder, )
+        self.model = Curt(num_queries=num_queries, num_classes=num_classes, decoder=decoder)
 
         matcher = HungarianMatcher(cost_class=match_cost_class,
                                    cost_curve=match_cost_curve)
