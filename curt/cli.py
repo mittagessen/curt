@@ -320,8 +320,8 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
 
 @cli.command('pred')
 @click.pass_context
-@click.option('i-i', '--load', help='Input model')
-@lick.option('-o', '--suffix', default='.overlay.png', show_default=True, help='Suffix for output files')
+@click.option('-i', '--load', help='Input model')
+@click.option('-o', '--suffix', default='.overlay.png', show_default=True, help='Suffix for output files')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('input_files', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def pred(ctx, load, suffix, device, input_files):
