@@ -6,8 +6,10 @@ import click
 import os.path
 import random
 import logging
+import pathlib
 import datetime
 import numpy as np
+import torchvision.transforms as tf
 
 from PIL import Image
 from pathlib import Path
@@ -18,6 +20,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from curt.models import CurtCurveModel, MaskedCurtCurveModel
 from curt.dataset import CurveDataModule
 from curt.progress import KrakenTrainProgressBar
+from curt.util.misc import NestedTensor
 
 
 def set_logger(logger=None, level=logging.ERROR):
@@ -179,6 +182,10 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   num_workers=workers,
                                   masks=True)
 
+    click.echo('Line types:')
+    for k, v in data_module.curve_train.class_mapping.items():
+        click.echo(f'{k}\t{v}')
+
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
     trainer = Trainer(default_root_dir=output,
@@ -276,6 +283,10 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   batch_size=batch_size,
                                   num_workers=workers)
 
+    click.echo('Line types:')
+    for k, v in data_module.curve_train.class_mapping.items():
+        click.echo(f'{k}\t{v}')
+
     if load:
         model = CurtCurveModel.load_from_checkpoint(load)
     else:
@@ -306,6 +317,33 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
 
     trainer.fit(model, data_module)
 
+
+@cli.command('pred')
+@click.pass_context
+@click.option('i-i', '--load', help='Input model')
+@lick.option('-o', '--suffix', default='.overlay.png', show_default=True, help='Suffix for output files')
+@click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
+@click.argument('input_files', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
+def pred(ctx, load, suffix, device, input_files):
+
+    curt_model = CurtCurveModel.load_from_checkpoint(load).model
+    curt_model = curt_model.to(device)
+
+    transforms = tf.Compose([tf.Resize(800),
+                             tf.ToTensor(),
+                             tf.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+
+    for file in input_files:
+        file = pathlib.Path(file)
+        with open(file, 'rb') as fp:
+            im = Image.open(file)
+            with open(file.with_suffix(suffix), 'wb') as fo:
+                with torch.no_grad():
+                    i = transforms(im).to(device).unsqueeze(0)
+                    mask = torch.zeros((1,) + i.shape[2:], device=device)
+                    i = NestedTensor(i, mask)
+                    o = curt_model(i)
+                curves = o['pred_curves']
 
 if __name__ == '__main__':
     cli()
