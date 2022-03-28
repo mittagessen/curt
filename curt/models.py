@@ -30,12 +30,12 @@ class CurtCurveModel(LightningModule):
                  num_heads: int = 8,
                  dim_ff: int = 2048,
                  decoder_layers: int = 3,
-                 decoder = 'mit_b0'):
+                 encoder = 'mit_b0'):
         super().__init__()
 
         self.save_hyperparameters()
 
-        self.model = Curt(num_queries=num_queries, num_classes=num_classes, decoder=decoder)
+        self.model = Curt(num_queries=num_queries, num_classes=num_classes, encoder=encoder)
 
         matcher = HungarianMatcher(cost_class=match_cost_class,
                                    cost_curve=match_cost_curve)
@@ -80,7 +80,7 @@ class CurtCurveModel(LightningModule):
 
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, num_classes: int, num_queries: int, num_decoder_layers: int, encoder: str = 'mit_b0', pretrained: bool = True):
+    def __init__(self, num_classes: int, num_queries: int, num_decoder_layers: int = 3, encoder: str = 'mit_b0', pretrained: bool = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
