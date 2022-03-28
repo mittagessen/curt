@@ -123,8 +123,7 @@ def cli(ctx, verbose, seed):
               help='Baseline type merge mapping. Same syntax as `--merge-regions`',
               multiple=True,
               callback=_validate_merging)
-@click.option('-mab',
-              '--merge-all-baselines',
+@click.option('--merge-all-baselines/--no-merge-baselines',
               show_default=True,
               default=False,
               help='Merge all baseline types into `default`')
@@ -247,8 +246,7 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
               help='Baseline type merge mapping. Same syntax as `--merge-regions`',
               multiple=True,
               callback=_validate_merging)
-@click.option('-mab',
-              '--merge-all-baselines',
+@click.option('--merge-all-baselines/--no-merge-baselines',
               show_default=True,
               default=False,
               help='Merge all baseline types into `default`')
