@@ -183,7 +183,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   masks=True)
 
     click.echo('Line types:')
-    for k, v in data_module.curve_train.class_mapping.items():
+    for k, v in data_module.curve_train..dataset.class_mapping.items():
         click.echo(f'{k}\t{v}')
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
@@ -284,7 +284,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   num_workers=workers)
 
     click.echo('Line types:')
-    for k, v in data_module.curve_train.class_mapping.items():
+    for k, v in data_module.curve_train..dataset.class_mapping.items():
         click.echo(f'{k}\t{v}')
 
     if load:
