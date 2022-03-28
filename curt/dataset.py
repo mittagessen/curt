@@ -24,6 +24,7 @@ class CurveDataModule(pl.LightningDataModule):
                  partition: Optional[float] = 0.9,
                  valid_baselines: Sequence[str] = None,
                  merge_baselines: Dict[str, Sequence[str]] = None,
+                 merge_all_baselines: bool = False,
                  max_lines: int = 400,
                  batch_size: int = 2,
                  num_workers: int = 2,
@@ -51,6 +52,9 @@ class CurveDataModule(pl.LightningDataModule):
 
         self._val_transforms = tf.Compose([tf.RandomResize([800], max_size=1333),
                                            normalize])
+
+        if merge_all_baselines:
+            self.hparams.merge_baselines = defaultdict(lambda: 1)
 
         train_set = BaselineSet(self.hparams.train_files,
                                 self._train_transforms,

@@ -123,14 +123,19 @@ def cli(ctx, verbose, seed):
               help='Baseline type merge mapping. Same syntax as `--merge-regions`',
               multiple=True,
               callback=_validate_merging)
+@click.option('-mab',
+              '--merge-all-baselines',
+              show_default=True,
+              default=False,
+              help='Merge all baseline types into `default`')
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
+def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
         clip_max_norm, dropout, match_cost_class, match_cost_curve,
         curve_loss_coef, eos_coef, mask_loss_coef, dice_loss_coef, load,
         output, partition, training_files, evaluation_files, valid_baselines,
-        merge_baselines, workers, device, ground_truth):
+        merge_baselines, merge_all_baselines, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -177,13 +182,14 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   partition=partition,
                                   valid_baselines=valid_baselines,
                                   merge_baselines=merge_baselines,
+                                  merge_all_baselines=merge_all_baselines,
                                   max_lines=curt_model.num_queries,
                                   batch_size=batch_size,
                                   num_workers=workers,
                                   masks=True)
 
     click.echo('Line types:')
-    for k, v in data_module.curve_train..dataset.class_mapping.items():
+    for k, v in data_module.curve_train.dataset.class_mapping.items():
         click.echo(f'{k}\t{v}')
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
@@ -241,6 +247,11 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
               help='Baseline type merge mapping. Same syntax as `--merge-regions`',
               multiple=True,
               callback=_validate_merging)
+@click.option('-mab',
+              '--merge-all-baselines',
+              show_default=True,
+              default=False,
+              help='Merge all baseline types into `default`')
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
@@ -249,7 +260,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
           dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
-          workers, device, ground_truth):
+          merge_all_baselines, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -279,12 +290,13 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   partition=partition,
                                   valid_baselines=valid_baselines,
                                   merge_baselines=merge_baselines,
+                                  merge_all_baselines=merge_all_baselines,
                                   max_lines=num_queries,
                                   batch_size=batch_size,
                                   num_workers=workers)
 
     click.echo('Line types:')
-    for k, v in data_module.curve_train..dataset.class_mapping.items():
+    for k, v in data_module.curve_train.dataset.class_mapping.items():
         click.echo(f'{k}\t{v}')
 
     if load:
