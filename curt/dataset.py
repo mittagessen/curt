@@ -53,14 +53,12 @@ class CurveDataModule(pl.LightningDataModule):
         self._val_transforms = tf.Compose([tf.RandomResize([800], max_size=1333),
                                            normalize])
 
-        if merge_all_baselines:
-            self.hparams.merge_baselines = defaultdict(lambda: 1)
-
         train_set = BaselineSet(self.hparams.train_files,
                                 self._train_transforms,
                                 valid_baselines=self.hparams.valid_baselines,
                                 merge_baselines=self.hparams.merge_baselines,
                                 max_lines=self.hparams.max_lines,
+                                class_mapping=defaultdict(lambda: 1) if merge_all_baselines else None,
                                 masks=masks)
 
         if self.hparams.val_files:
@@ -128,7 +126,7 @@ class BaselineSet(Dataset):
         self.im_mode = '1'
         self.targets = []
         # n-th entry contains semantic of n-th class
-        self.class_mapping = defaultdict(lambda: len(self.class_mapping) + 1) if not class_mapping else class_mapping
+        self.class_mapping = defaultdict(lambda: len(self.class_mapping) + 1) if class_mapping is None else class_mapping
         self.class_stats = {'baselines': defaultdict(int)}
         self.mbl_dict = merge_baselines if merge_baselines is not None else {}
         self.max_lines_per_page = -1
