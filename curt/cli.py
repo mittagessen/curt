@@ -354,7 +354,7 @@ def pred(ctx, load, suffix, device, input_files):
                     i = transforms(im).to(device).unsqueeze(0)
                     mask = torch.zeros((1,) + i.shape[2:], device=device)
                     i = NestedTensor(i, mask)
-                    o = curt_model(i)
+                    o = curt_model(i).to('cpu')
                 draw = ImageDraw.Draw(im)
                 samples = np.linspace(0, 1, 20)
                 for line in o['pred_curves']:
