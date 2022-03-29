@@ -11,14 +11,14 @@ import datetime
 import numpy as np
 import torchvision.transforms as tf
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from pathlib import Path
 from rich.logging import RichHandler
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
 
 from curt.models import CurtCurveModel, MaskedCurtCurveModel
-from curt.dataset import CurveDataModule
+from curt.dataset import CurveDataModule, BezierCoeff
 from curt.progress import KrakenTrainProgressBar
 from curt.util.misc import NestedTensor
 
@@ -353,7 +353,15 @@ def pred(ctx, load, suffix, device, input_files):
                     mask = torch.zeros((1,) + i.shape[2:], device=device)
                     i = NestedTensor(i, mask)
                     o = curt_model(i)
-                curves = o['pred_curves']
+                draw = ImageDraw.Draw(im)
+                samples = np.linspace(0, 1, 20)
+                for line in o['pred_curves']:
+                    line = (np.array(line) * (im.size * 4))
+                    line.resize(4, 2)
+                    for t in np.array(BezierCoeff(samples)).dot(line):
+                        draw.rectangle((t[0]-2, t[1]-2, t[0]+2, t[1]+2), fill='red')
+                del draw
+                im.save(fo, format='png')
 
 if __name__ == '__main__':
     cli()
