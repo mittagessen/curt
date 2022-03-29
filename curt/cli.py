@@ -354,10 +354,11 @@ def pred(ctx, load, suffix, device, input_files):
                     i = transforms(im).to(device).unsqueeze(0)
                     mask = torch.zeros((1,) + i.shape[2:], device=device)
                     i = NestedTensor(i, mask)
-                    o = curt_model(i).to('cpu')
+                    o = curt_model(i)
                 draw = ImageDraw.Draw(im)
                 samples = np.linspace(0, 1, 20)
-                for line in o['pred_curves']:
+                curves = o['pred_curves'].to('cpu')
+                for line in curves:
                     line = (np.array(line) * (im.size * 4))
                     line.resize(4, 2)
                     for t in np.array(BezierCoeff(samples)).dot(line):
