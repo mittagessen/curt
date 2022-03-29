@@ -358,7 +358,7 @@ def pred(ctx, load, suffix, device, input_files):
                 draw = ImageDraw.Draw(im)
                 samples = np.linspace(0, 1, 20)
                 curves = o['pred_curves'].to('cpu')
-                for line in curves:
+                for line in curves[0]:
                     line = (np.array(line) * (im.size * 4))
                     line.resize(4, 2)
                     for t in np.array(BezierCoeff(samples)).dot(line):
