@@ -345,6 +345,7 @@ def pred(ctx, load, suffix, device, input_files):
                              tf.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
     for file in input_files:
+        click.echo(f'Processing {file}')
         file = pathlib.Path(file)
         with open(file, 'rb') as fp:
             im = Image.open(file)
