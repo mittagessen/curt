@@ -18,9 +18,10 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
 
 from curt.models import CurtCurveModel, MaskedCurtCurveModel
-from curt.dataset import CurveDataModule, BezierCoeff
+from curt.dataset import CurveDataModule
 from curt.progress import KrakenTrainProgressBar
 from curt.util.misc import NestedTensor
+from curt.transforms import BezierCoeff
 
 
 def set_logger(logger=None, level=logging.ERROR):
