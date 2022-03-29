@@ -191,7 +191,7 @@ class MaskedCurtCurveModel(LightningModule):
 
 class MaskedCurt(nn.Module):
     """ Curt with a mask on."""
-    def __init__(self, num_classes: int, num_queries: int, pretrained: bool = True):
+    def __init__(self, num_classes: int, num_queries: int, num_decoder_layers: int = 3, encoder: str = 'mit_b0', pretrained: bool = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -204,16 +204,18 @@ class MaskedCurt(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.num_queries = num_queries
-        self.transformer = mit_b0(pretrained=pretrained)
+        self.num_decoder_layers = num_decoder_layers
+        self.encoder = encoder
+        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
+
         for p in self.transformer.parameters():
             p.requires_grad_(False)
 
         self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
                                     num_queries=num_queries,
-                                    num_classes=num_classes)
+                                    num_classes=num_classes,
+                                    num_decoder_layers=num_decoder_layers)
 
-        for p in self.head.parameters():
-            p.requires_grad_(False)
         self.mask_head = SegmentationHead(self.head)
 
     def forward(self, samples: NestedTensor):

@@ -124,6 +124,9 @@ class SegmentationHead(nn.Module):
 
         self.curve_head = curve_head
 
+        for p in self.curve_head.parameters():
+            p.requires_grad_(False)
+
         hidden_dim = self.curve_head.embedding_dim
         num_heads = self.curve_head.num_heads
         self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads, dropout=0.0)
