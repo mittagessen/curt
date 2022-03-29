@@ -166,13 +166,10 @@ class OverlapPatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=(1200, 800), patch_size=(7, 7), stride=4, in_chans=3, embed_dim=768):
+    def __init__(self, patch_size=(7, 7), stride=4, in_chans=3, embed_dim=768):
         super().__init__()
 
-        self.img_size = img_size
         self.patch_size = patch_size
-        self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
-        self.num_patches = self.H * self.W
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -204,7 +201,7 @@ class OverlapPatchEmbed(nn.Module):
 
 
 class MixVisionTransformer(nn.Module):
-    def __init__(self, img_size=(1200, 800), in_chans=3, embed_dims=[64, 128, 256, 512],
+    def __init__(self, in_chans=3, embed_dims=[64, 128, 256, 512],
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
                  depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1]):
@@ -213,13 +210,13 @@ class MixVisionTransformer(nn.Module):
         self.embed_dims = embed_dims
 
         # patch_embed
-        self.patch_embed1 = OverlapPatchEmbed(img_size=img_size, patch_size=(7, 7), stride=4, in_chans=in_chans,
+        self.patch_embed1 = OverlapPatchEmbed(patch_size=(7, 7), stride=4, in_chans=in_chans,
                                               embed_dim=embed_dims[0])
-        self.patch_embed2 = OverlapPatchEmbed(img_size=np.divide(img_size, (4, 4)), patch_size=(3, 3), stride=2, in_chans=embed_dims[0],
+        self.patch_embed2 = OverlapPatchEmbed(patch_size=(3, 3), stride=2, in_chans=embed_dims[0],
                                               embed_dim=embed_dims[1])
-        self.patch_embed3 = OverlapPatchEmbed(img_size=np.divide(img_size, (8, 8)), patch_size=(3, 3), stride=2, in_chans=embed_dims[1],
+        self.patch_embed3 = OverlapPatchEmbed(patch_size=(3, 3), stride=2, in_chans=embed_dims[1],
                                               embed_dim=embed_dims[2])
-        self.patch_embed4 = OverlapPatchEmbed(img_size=np.divide(img_size, (16, 16)), patch_size=(3, 3), stride=2, in_chans=embed_dims[2],
+        self.patch_embed4 = OverlapPatchEmbed(patch_size=(3, 3), stride=2, in_chans=embed_dims[2],
                                               embed_dim=embed_dims[3])
 
         # transformer encoder
