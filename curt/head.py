@@ -129,8 +129,8 @@ class SegmentationHead(nn.Module):
 
         hidden_dim = self.curve_head.embedding_dim
         num_heads = self.curve_head.num_heads
-        self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads, dropout=0.0)
-        self.mask_head = MaskHeadSmallConv(hidden_dim + num_heads, [160, 64, 32], hidden_dim)
+        self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads)
+        self.mask_head = MaskHeadSmallConv(hidden_dim + num_heads, 32, hidden_dim)
 
     def forward(self, features, mask):
         c1, c2, c3, c4 = features
@@ -174,7 +174,7 @@ class SegmentationHead(nn.Module):
         # src_proj: torch.Size([2, 256, 32, 34])
         # seg_masks torch.Size([200, 1, 253, 267])
         # output_seg_masks torch.Size([2, 100, 253, 267])
-        seg_masks = self.mask_head(features, curve_mask, [c3, c2, c1])
+        seg_masks = self.mask_head(features, curve_mask, c1)
         outputs_seg_masks = seg_masks.view(n, self.curve_head.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
 
         return {'pred_logits': output_class[-1], 'pred_curves': output_curves[-1], 'pred_masks': outputs_seg_masks}
@@ -183,7 +183,6 @@ class SegmentationHead(nn.Module):
 class MaskHeadSmallConv(nn.Module):
     """
     Simple convolutional head, using group norm.
-    Upsampling is done using a FPN approach
     """
 
     def __init__(self, dim, fpn_dims, context_dim):
@@ -194,26 +193,16 @@ class MaskHeadSmallConv(nn.Module):
         self.gn1 = torch.nn.GroupNorm(8, dim)
         self.lay2 = torch.nn.Conv2d(dim, inter_dims[1], 3, padding=1)
         self.gn2 = torch.nn.GroupNorm(8, inter_dims[1])
-        self.lay3 = torch.nn.Conv2d(inter_dims[1], inter_dims[2], 3, padding=1)
-        self.gn3 = torch.nn.GroupNorm(8, inter_dims[2])
-        self.lay4 = torch.nn.Conv2d(inter_dims[2], inter_dims[3], 3, padding=1)
-        self.gn4 = torch.nn.GroupNorm(8, inter_dims[3])
-        self.lay5 = torch.nn.Conv2d(inter_dims[3], inter_dims[4], 3, padding=1)
-        self.gn5 = torch.nn.GroupNorm(8, inter_dims[4])
         self.out_lay = torch.nn.Conv2d(inter_dims[4], 1, 3, padding=1)
 
         self.dim = dim
-
-        self.adapter1 = torch.nn.Conv2d(fpn_dims[0], inter_dims[1], 1)
-        self.adapter2 = torch.nn.Conv2d(fpn_dims[1], inter_dims[2], 1)
-        self.adapter3 = torch.nn.Conv2d(fpn_dims[2], inter_dims[3], 1)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_uniform_(m.weight, a=1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x: Tensor, curve_mask: Tensor, fpns: List[Tensor]):
+    def forward(self, x: Tensor, curve_mask: Tensor):
         x = torch.cat([_expand(x, curve_mask.shape[1]), curve_mask.flatten(0, 1)], 1)
         x = self.lay1(x)
         x = self.gn1(x)
@@ -221,31 +210,6 @@ class MaskHeadSmallConv(nn.Module):
         x = self.lay2(x)
         x = self.gn2(x)
         x = F.relu(x)
-
-        cur_fpn = self.adapter1(fpns[0])
-        if cur_fpn.size(0) != x.size(0):
-            cur_fpn = _expand(cur_fpn, x.size(0) // cur_fpn.size(0))
-        x = cur_fpn + F.interpolate(x, size=cur_fpn.shape[-2:], mode="nearest")
-        x = self.lay3(x)
-        x = self.gn3(x)
-        x = F.relu(x)
-
-        cur_fpn = self.adapter2(fpns[1])
-        if cur_fpn.size(0) != x.size(0):
-            cur_fpn = _expand(cur_fpn, x.size(0) // cur_fpn.size(0))
-        x = cur_fpn + F.interpolate(x, size=cur_fpn.shape[-2:], mode="nearest")
-        x = self.lay4(x)
-        x = self.gn4(x)
-        x = F.relu(x)
-
-        cur_fpn = self.adapter3(fpns[2])
-        if cur_fpn.size(0) != x.size(0):
-            cur_fpn = _expand(cur_fpn, x.size(0) // cur_fpn.size(0))
-        x = cur_fpn + F.interpolate(x, size=cur_fpn.shape[-2:], mode="nearest")
-        x = self.lay5(x)
-        x = self.gn5(x)
-        x = F.relu(x)
-
         x = self.out_lay(x)
         return x
 
@@ -260,11 +224,10 @@ class MHAttentionMap(nn.Module):
     multiplication by value)
     """
 
-    def __init__(self, query_dim, hidden_dim, num_heads, dropout=0.0, bias=True):
+    def __init__(self, query_dim, hidden_dim, num_heads, bias=True):
         super().__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.dropout = nn.Dropout(dropout)
 
         self.q_linear = nn.Linear(query_dim, hidden_dim, bias=bias)
         self.k_linear = nn.Linear(query_dim, hidden_dim, bias=bias)
@@ -285,7 +248,6 @@ class MHAttentionMap(nn.Module):
         if mask is not None:
             weights.masked_fill_(mask.unsqueeze(1).unsqueeze(1), float("-inf"))
         weights = F.softmax(weights.flatten(2), dim=-1).view(weights.size())
-        weights = self.dropout(weights)
         return weights
 
 
