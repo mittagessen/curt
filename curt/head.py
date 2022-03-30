@@ -174,7 +174,7 @@ class SegmentationHead(nn.Module):
         # src_proj: torch.Size([2, 256, 32, 34])
         # seg_masks torch.Size([200, 1, 253, 267])
         # output_seg_masks torch.Size([2, 100, 253, 267])
-        seg_masks = self.mask_head(features, curve_mask, c1)
+        seg_masks = self.mask_head(features, curve_mask)
         outputs_seg_masks = seg_masks.view(n, self.curve_head.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
 
         return {'pred_logits': output_class[-1], 'pred_curves': output_curves[-1], 'pred_masks': outputs_seg_masks}
