@@ -130,7 +130,7 @@ class SegmentationHead(nn.Module):
         hidden_dim = self.curve_head.embedding_dim
         num_heads = self.curve_head.num_heads
         self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads)
-        self.mask_head = MaskHeadSmallConv(hidden_dim + num_heads, 32, hidden_dim)
+        self.mask_head = MaskHeadSmallConv(hidden_dim + num_heads, hidden_dim)
 
     def forward(self, features, mask):
         c1, c2, c3, c4 = features
@@ -185,15 +185,15 @@ class MaskHeadSmallConv(nn.Module):
     Simple convolutional head, using group norm.
     """
 
-    def __init__(self, dim, fpn_dims, context_dim):
+    def __init__(self, dim, context_dim):
         super().__init__()
 
-        inter_dims = [dim, context_dim // 2, context_dim // 4, context_dim // 8, context_dim // 16, context_dim // 64]
+        inter_dims = [dim, context_dim // 2]
         self.lay1 = torch.nn.Conv2d(dim, dim, 3, padding=1)
         self.gn1 = torch.nn.GroupNorm(8, dim)
         self.lay2 = torch.nn.Conv2d(dim, inter_dims[1], 3, padding=1)
         self.gn2 = torch.nn.GroupNorm(8, inter_dims[1])
-        self.out_lay = torch.nn.Conv2d(inter_dims[4], 1, 3, padding=1)
+        self.out_lay = torch.nn.Conv2d(inter_dims[1], 1, 3, padding=1)
 
         self.dim = dim
 
