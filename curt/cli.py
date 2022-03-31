@@ -198,7 +198,7 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
                       gradient_clip_val=clip_max_norm,
                       max_epochs=epochs,
                       gpus=device,
-                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging()],
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
                       **val_check_interval)
 
     trainer.fit(model, data_module)
