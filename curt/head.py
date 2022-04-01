@@ -130,7 +130,7 @@ class SegmentationHead(nn.Module):
         hidden_dim = self.curve_head.embedding_dim
         num_heads = self.curve_head.num_heads
         self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads)
-        self.mask_head = MaskHeadSmallConv(hidden_dim + num_heads, hidden_dim)
+        self.mask_head = MaskHeadSmallConv(hidden_dim,  num_heads, 32)
 
     def forward(self, features, mask):
         c1, c2, c3, c4 = features
@@ -178,19 +178,17 @@ class SegmentationHead(nn.Module):
 
 class MaskHeadSmallConv(nn.Module):
     """
-    Simple convolutional head, using group norm.
+    Simple convolutional head with a bottleneck layer.
     """
-
-    def __init__(self, dim, context_dim):
+    def __init__(self, feature_dim, att_dim, inter_dim):
         super().__init__()
-
-        self.lay1 = torch.nn.Conv2d(dim, dim, 3, padding=1)
-        self.gn1 = torch.nn.GroupNorm(8, dim)
-        self.lay2 = torch.nn.Conv2d(dim, context_dim // 2, 3, padding=1)
-        self.gn2 = torch.nn.GroupNorm(8, context_dim // 2)
-        self.out_lay = torch.nn.Conv2d(context_dim // 2, 1, 3, padding=1)
-
-        self.dim = dim
+        self.bottle_conv = torch.nn.Conv2d(feature_dim, inter_dim)
+        self.gn1 = torch.nn.GroupNorm(8, inter_dim)
+        self.conv_1 = torch.nn.Conv2d(inter_dim + att_dim, inter_dim, 3, padding=1)
+        self.gn2 = torch.nn.GroupNorm(8, inter_dim)
+        self.conv_2 = torch.nn.Conv2d(inter_dim, inter_dim, 3, padding=1)
+        self.gn3 = torch.nn.GroupNorm(8, inter_dim)
+        self.out_lay = torch.nn.Conv2d(inter_dim, 1, 3, padding=1)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -198,18 +196,20 @@ class MaskHeadSmallConv(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, inputs: Tensor, curve_mask: Tensor):
+        x = self.bottle_conv(inputs)
         curve_mask = curve_mask.flatten(0, 1)
-        masks = []
-        for curve in curve_mask:
-            x = torch.cat([inputs, curve.unsqueeze(0)], 1)
-            x = self.lay1(x)
-            x = self.gn1(x)
-            x = F.relu(x)
-            x = self.lay2(x)
-            x = self.gn2(x)
-            x = F.relu(x)
-            masks.append(self.out_lay(x))
-        return torch.cat(masks)
+        x = torch.cat([_expand(x, curve_mask.shape[1]), curve_mask.flatten(0, 1)], 1)
+        x = self.conv_1(x)
+        x = self.gn1(x)
+        x = F.relu(x)
+        x = self.conv_2(x)
+        x = self.gn2(x)
+        x = F.relu(x)
+        return self.out_lay(x)
+
+
+def _expand(tensor, length: int):
+    return tensor.unsqueeze(1).repeat(1, int(length), 1, 1, 1).flatten(0, 1)
 
 
 class MHAttentionMap(nn.Module):
