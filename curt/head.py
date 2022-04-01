@@ -197,7 +197,6 @@ class MaskHeadSmallConv(nn.Module):
 
     def forward(self, inputs: Tensor, curve_mask: Tensor):
         x = self.bottle_conv(inputs)
-        curve_mask = curve_mask.flatten(0, 1)
         x = torch.cat([_expand(x, curve_mask.shape[1]), curve_mask.flatten(0, 1)], 1)
         x = self.conv_1(x)
         x = self.gn1(x)
