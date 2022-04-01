@@ -182,7 +182,7 @@ class MaskHeadSmallConv(nn.Module):
     """
     def __init__(self, feature_dim, att_dim, inter_dim):
         super().__init__()
-        self.bottle_conv = torch.nn.Conv2d(feature_dim, inter_dim)
+        self.bottle_conv = torch.nn.Conv2d(feature_dim, inter_dim, 1)
         self.gn1 = torch.nn.GroupNorm(8, inter_dim)
         self.conv_1 = torch.nn.Conv2d(inter_dim + att_dim, inter_dim, 3, padding=1)
         self.gn2 = torch.nn.GroupNorm(8, inter_dim)
