@@ -325,9 +325,9 @@ class SetCriterion(nn.Module):
         assert "pred_masks" in outputs
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
-        src_masks = outputs["pred_masks"]
+        src_masks = outputs['pred_masks']
         src_masks = src_masks[src_idx]
-        masks = [t["mask"] for t in targets]
+        masks = [t['masks'] for t in targets]
         # TODO use valid to mask invalid areas due to padding in loss
         target_masks, valid = nested_tensor_from_tensor_list(masks).decompose()
         target_masks = target_masks.to(src_masks)

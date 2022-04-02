@@ -354,9 +354,8 @@ class BezierFit(object):
                 masks[idx, rr, cc] = 1
             labels.append(label)
         ttarget = {'labels': torch.LongTensor(labels),
-                   'curves': torch.Tensor(curves) if curves else torch.zeros((0, 8))}
-        if masks is not None:
-            ttarget['masks'] = masks
+                   'curves': torch.Tensor(curves) if curves else torch.zeros((0, 8)),
+                   'masks': masks if masks is not None else torch.zeros((0,) + im_size[::-1])}
         return image, ttarget
 
 class Compose(object):
