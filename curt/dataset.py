@@ -154,10 +154,11 @@ class BaselineSet(Dataset):
                             ls = LineString(baseline)
                             baseline = np.stack([np.array(ls.interpolate(x, normalized=True).coords)[0] for x in np.linspace(0, 1, 8)])
                         if self.masks:
-                            line_masks = np.array(line['boundary'])
-                            curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
-                                           'baseline': baseline,
-                                           'mask': line_masks})
+                            if line['boundary']:
+                                line_masks = np.array(line['boundary'])
+                                curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
+                                               'baseline': baseline,
+                                               'mask': line_masks})
                         else:
                             curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
                                            'baseline': baseline})
