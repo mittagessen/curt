@@ -139,10 +139,6 @@ class BaselineSet(Dataset):
         # n-th entry contains semantic of n-th class
         if class_mapping:
             cls_map = class_mapping
-        else:
-            cls_fn = lambda: len(self.class_mapping) + 1
-            cls_map = defaultdict(cls_fn)
-
         self.class_mapping = cls_map
         self.class_stats = {'baselines': defaultdict(int)}
         self.mbl_dict = merge_baselines if merge_baselines is not None else {}
