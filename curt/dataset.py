@@ -132,7 +132,7 @@ class BaselineSet(Dataset):
         self.im_mode = '1'
         self.targets = []
         # n-th entry contains semantic of n-th class
-        if cls_mapping:
+        if class_mapping:
             cls_map = class_mapping
         else:
             cls_fn = lambda: len(self.class_mapping) + 1
