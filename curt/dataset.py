@@ -17,6 +17,12 @@ from shapely.geometry import LineString
 
 from curt.util.misc import collate_fn
 
+
+def _always_one():
+    return 1
+
+
+
 class CurveDataModule(pl.LightningDataModule):
     def __init__(self,
                  train_files: Sequence[Union[str, pathlib.Path]],
@@ -54,8 +60,7 @@ class CurveDataModule(pl.LightningDataModule):
                                            normalize])
 
         if merge_all_baselines:
-            cls_fn = lambda: 1
-            cls_map = defaultdict(cls_fn)
+            cls_map = defaultdict(_always_one)
         else:
             cls_map = None
 
