@@ -68,7 +68,8 @@ class CurtCurveModel(LightningModule):
         self.log_dict({'loss': sum(loss_dict_scaled.values()),
                        'class_error': loss_dict['class_error'],
                        **loss_dict_scaled,
-                       **loss_dict_unscaled})
+                       **loss_dict_unscaled},
+                       sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(),
@@ -179,7 +180,8 @@ class MaskedCurtCurveModel(LightningModule):
         self.log_dict({'loss': sum(loss_dict_scaled.values()),
                        'class_error': loss_dict['class_error'],
                        **loss_dict_scaled,
-                       **loss_dict_unscaled})
+                       **loss_dict_unscaled},
+                       sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(),
