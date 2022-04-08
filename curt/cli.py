@@ -188,9 +188,9 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
                                   num_workers=workers,
                                   masks=True)
 
-    click.echo('Line types:')
-    for k, v in data_module.curve_train.dataset.class_mapping.items():
-        click.echo(f'{k}\t{v}')
+    click.echo("Line types: There's only one.")
+#    for k, v in data_module.curve_train.dataset.class_mapping.items():
+#        click.echo(f'{k}\t{v}')
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
