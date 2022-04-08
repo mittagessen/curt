@@ -8,7 +8,6 @@ import pytorch_lightning as pl
 import curt.transforms as tf
 
 from PIL import Image
-from collections import defaultdict
 from torch.utils.data import Dataset
 from typing import Dict, Sequence, Callable, Any, Union, Optional
 from kraken.lib.xml import parse_xml
@@ -16,11 +15,6 @@ from torch.utils.data import DataLoader, random_split, Subset
 from shapely.geometry import LineString
 
 from curt.util.misc import collate_fn
-
-
-def _always_one():
-    return 1
-
 
 
 class CurveDataModule(pl.LightningDataModule):
@@ -59,17 +53,12 @@ class CurveDataModule(pl.LightningDataModule):
         self._val_transforms = tf.Compose([tf.RandomResize([800], max_size=1333),
                                            normalize])
 
-        if merge_all_baselines:
-            cls_map = defaultdict(_always_one)
-        else:
-            cls_map = None
-
         train_set = BaselineSet(self.hparams.train_files,
                                 self._train_transforms,
                                 valid_baselines=self.hparams.valid_baselines,
                                 merge_baselines=self.hparams.merge_baselines,
                                 max_lines=self.hparams.max_lines,
-                                class_mapping=cls_map,
+                                class_mapping=None,
                                 masks=masks)
 
         if self.hparams.val_files:
@@ -78,7 +67,7 @@ class CurveDataModule(pl.LightningDataModule):
                                   valid_baselines=self.hparams.valid_baselines,
                                   merge_baselines=self.hparams.merge_baselines,
                                   max_lines=self.hparams.max_lines,
-                                  class_mapping=train_set.class_mapping,
+                                  class_mapping=None,
                                   masks=masks)
 
             train_set = Subset(train_set, range(len(train_set)))
@@ -136,11 +125,6 @@ class BaselineSet(Dataset):
         super().__init__()
         self.im_mode = '1'
         self.targets = []
-        # n-th entry contains semantic of n-th class
-        if class_mapping:
-            cls_map = class_mapping
-        self.class_mapping = cls_map
-        self.class_stats = {'baselines': defaultdict(int)}
         self.mbl_dict = merge_baselines if merge_baselines is not None else {}
         self.max_lines_per_page = -1
         self.valid_baselines = valid_baselines
@@ -169,13 +153,12 @@ class BaselineSet(Dataset):
                         if self.masks:
                             if line['boundary']:
                                 line_masks = np.array(line['boundary'])
-                                curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
+                                curves.append({'tag': 1,
                                                'baseline': baseline,
                                                'mask': line_masks})
                         else:
-                            curves.append({'tag': self.class_mapping[self.mbl_dict.get(tag, tag)],
+                            curves.append({'tag': 1,
                                            'baseline': baseline})
-                        self.class_stats['baselines'][self.mbl_dict.get(tag, tag)] += 1
             if len(curves) > max_lines:
                 continue
             self.max_lines_per_page = max(self.max_lines_per_page, len(curves))
@@ -186,7 +169,7 @@ class BaselineSet(Dataset):
 
         self.imgs = im_paths
         self._transforms = im_transforms
-        self.num_classes = max(self.class_mapping.values())
+        self.num_classes = 1
 
     def __getitem__(self, idx):
         im = self.imgs[idx]
