@@ -294,9 +294,9 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
                                   batch_size=batch_size,
                                   num_workers=workers)
 
-    click.echo('Line types:')
-    for k, v in data_module.curve_train.dataset.class_mapping.items():
-        click.echo(f'{k}\t{v}')
+    click.echo("Line types: There's only one.")
+#    for k, v in data_module.curve_train.dataset.class_mapping.items():
+#        click.echo(f'{k}\t{v}')
 
     if load:
         model = CurtCurveModel.load_from_checkpoint(load)
