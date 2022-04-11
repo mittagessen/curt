@@ -153,11 +153,11 @@ class BaselineSet(Dataset):
                         if self.masks:
                             if line['boundary']:
                                 line_masks = np.array(line['boundary'])
-                                curves.append({'tag': 1,
+                                curves.append({'tag': 0,
                                                'baseline': baseline,
                                                'mask': line_masks})
                         else:
-                            curves.append({'tag': 1,
+                            curves.append({'tag': 0,
                                            'baseline': baseline})
             if len(curves) > max_lines:
                 continue

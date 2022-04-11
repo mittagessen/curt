@@ -43,7 +43,7 @@ class CurveFormerHead(nn.Module):
     def __init__(self,
                  in_channels=[32, 64, 160, 256],
                  num_queries=400,
-                 num_classes=2,
+                 num_classes=1,
                  embedding_dim=256,
                  dropout_ratio=0.1,
                  nhead=8,

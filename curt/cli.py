@@ -129,7 +129,7 @@ def cli(ctx, verbose, seed):
               default=False,
               help='Merge all baseline types into `default`')
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
-@click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
+@click.option('-d', '--device', show_default=True, default='1', help='Select device to use (1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
         clip_max_norm, dropout, match_cost_class, match_cost_curve,
@@ -147,11 +147,6 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
     if len(ground_truth) == 0:
         raise click.UsageError('No training data was provided to the train command. Use `-t` or the `ground_truth` argument.')
 
-    if device == 'cpu':
-        device = None
-    elif device.startswith('cuda'):
-        device = [int(device.split(':')[-1])]
-
     if freq > 1:
         val_check_interval = {'check_val_every_n_epoch': int(freq)}
     else:
@@ -159,8 +154,6 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
 
     if not valid_baselines:
         valid_baselines = None
-
-
 
     if load:
         curt_model = CurtCurveModel.load_from_checkpoint(load).model
@@ -197,7 +190,10 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
     trainer = Trainer(default_root_dir=output,
                       gradient_clip_val=clip_max_norm,
                       max_epochs=epochs,
-                      gpus=device,
+                      auto_select_gpus=True,
+                      accelerator='gpu',
+                      devices=device,
+                      strategy='ddp',
                       callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
                       **val_check_interval)
 
@@ -252,7 +248,7 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
               default=False,
               help='Merge all baseline types into `default`')
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
-@click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
+@click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
           clip_max_norm, encoder, decoder_layers, dim_ff, hidden_dim,
@@ -270,11 +266,6 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
 
     if len(ground_truth) == 0:
         raise click.UsageError('No training data was provided to the train command. Use `-t` or the `ground_truth` argument.')
-
-    if device == 'cpu':
-        device = None
-    elif device.startswith('cuda'):
-        device = [int(device.split(':')[-1])]
 
     if freq > 1:
         val_check_interval = {'check_val_every_n_epoch': int(freq)}
@@ -301,7 +292,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
     if load:
         model = CurtCurveModel.load_from_checkpoint(load)
     else:
-        model = CurtCurveModel(data_module.num_classes+1,
+        model = CurtCurveModel(data_module.num_classes,
                                num_queries=num_queries,
                                learning_rate=learning_rate,
                                weight_decay=weight_decay,
@@ -322,8 +313,11 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
     trainer = Trainer(default_root_dir=output,
                       gradient_clip_val=clip_max_norm,
                       max_epochs=epochs,
-                      gpus=device,
-                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging()],
+                      auto_select_gpus=True,
+                      accelerator='gpu',
+                      devices=device,
+                      strategy='ddp',
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
                       **val_check_interval)
 
     trainer.fit(model, data_module)
