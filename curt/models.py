@@ -73,7 +73,7 @@ class CurtCurveModel(LightningModule):
 
     def configure_optimizers(self):
         from ranger21 import Ranger21
-        optimizer = Ranger21(self.models.parameters(),
+        optimizer = Ranger21(self.model.parameters(),
                              lr=self.hparams.learning_rate,
                              num_epochs=self.trainer.max_epochs,
                              num_batches_per_epoch=len(self.train_dataloader()))
@@ -186,7 +186,7 @@ class MaskedCurtCurveModel(LightningModule):
 
     def configure_optimizers(self):
         from ranger21 import Ranger21
-        optimizer = Ranger21(self.models.parameters(),
+        optimizer = Ranger21(self.model.parameters(),
                              lr=self.hparams.learning_rate,
                              num_epochs=self.trainer.max_epochs,
                              num_batches_per_epoch=len(self.train_dataloader()))
