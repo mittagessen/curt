@@ -72,11 +72,12 @@ class CurtCurveModel(LightningModule):
                        sync_dist=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.model.parameters(),
-                                      lr=self.hparams.learning_rate,
-                                      weight_decay=self.hparams.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
-        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+        from ranger21 import Ranger21
+        optimizer = Ranger21(self.models.parameters(),
+                             lr=self.hparams.learning_rate,
+                             num_epochs=self.trainer.max_epochs,
+                             num_batches_per_epoch=len(self.train_dataloader()))
+        return optimizer
 
 
 class Curt(nn.Module):
@@ -184,11 +185,12 @@ class MaskedCurtCurveModel(LightningModule):
                        sync_dist=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.model.parameters(),
-                                      lr=self.hparams.learning_rate,
-                                      weight_decay=self.hparams.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
-        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+        from ranger21 import Ranger21
+        optimizer = Ranger21(self.models.parameters(),
+                             lr=self.hparams.learning_rate,
+                             num_epochs=self.trainer.max_epochs,
+                             num_batches_per_epoch=len(self.train_dataloader()))
+        return optimizer
 
 
 class MaskedCurt(nn.Module):
