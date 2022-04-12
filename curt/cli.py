@@ -155,6 +155,17 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
     if not valid_baselines:
         valid_baselines = None
 
+    data_module = CurveDataModule(train_files=ground_truth,
+                                  val_files=evaluation_files,
+                                  partition=partition,
+                                  valid_baselines=valid_baselines,
+                                  merge_baselines=merge_baselines,
+                                  merge_all_baselines=merge_all_baselines,
+                                  max_lines=curt_model.num_queries,
+                                  batch_size=batch_size,
+                                  num_workers=workers,
+                                  masks=True)
+
     if load:
         curt_model = CurtCurveModel.load_from_checkpoint(load).model
         model = MaskedCurtCurveModel(curt_model,
@@ -166,20 +177,10 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
                                      curve_loss_coef=curve_loss_coef,
                                      mask_loss_coef=mask_loss_coef,
                                      dice_loss_coef=dice_loss_coef,
-                                     eos_coef=eos_coef)
+                                     eos_coef=eos_coef,
+                                     batches_per_epoch=len(data_module.train_dataloader()))
     else:
         raise click.UsageError('No pretrained weights given for mask head training.')
-
-    data_module = CurveDataModule(train_files=ground_truth,
-                                  val_files=evaluation_files,
-                                  partition=partition,
-                                  valid_baselines=valid_baselines,
-                                  merge_baselines=merge_baselines,
-                                  merge_all_baselines=merge_all_baselines,
-                                  max_lines=curt_model.num_queries,
-                                  batch_size=batch_size,
-                                  num_workers=workers,
-                                  masks=True)
 
     click.echo("Line types: There's only one.")
 #    for k, v in data_module.curve_train.dataset.class_mapping.items():
@@ -194,6 +195,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
                       accelerator='gpu',
                       devices=device,
                       callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
+                      batches_per_epoch=len(data_module.train_dataloader()),
                       **val_check_interval)
 
     trainer.fit(model, data_module)
@@ -305,7 +307,8 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
                                num_heads=num_heads,
                                dim_ff=dim_ff,
                                encoder=encoder,
-                               decoder_layers=decoder_layers)
+                               decoder_layers=decoder_layers,
+                               batches_per_epoch=len(data_module.train_dataloader()))
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 

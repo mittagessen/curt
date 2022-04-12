@@ -30,9 +30,11 @@ class CurtCurveModel(LightningModule):
                  num_heads: int = 8,
                  dim_ff: int = 2048,
                  decoder_layers: int = 3,
-                 encoder = 'mit_b0'):
+                 encoder = 'mit_b0',
+                 batches_per_epoch = None):
         super().__init__()
 
+        self.batches_per_epoch = batches_per_epoch
         self.save_hyperparameters()
 
         self.model = Curt(num_queries=num_queries, num_classes=num_classes, encoder=encoder)
@@ -76,7 +78,7 @@ class CurtCurveModel(LightningModule):
         optimizer = Ranger21(self.model.parameters(),
                              lr=self.hparams.learning_rate,
                              num_epochs=self.trainer.max_epochs,
-                             num_batches_per_epoch=len(self.train_dataloader()))
+                             num_batches_per_epoch=self.batches_per_epoch)
         return optimizer
 
 
@@ -137,10 +139,13 @@ class MaskedCurtCurveModel(LightningModule):
                  curve_loss_coef: float = 5.0,
                  mask_loss_coef: float = 1.0,
                  dice_loss_coef: float = 1.0,
-                 eos_coef: float = 0.1):
+                 eos_coef: float = 0.1,
+                 batches_per_epoch = None):
         super().__init__()
 
         self.save_hyperparameters()
+
+        self.batches_per_epoch = batches_per_epoch
 
         self.model = MaskedCurt(num_classes=curt.num_classes, num_queries=curt.num_queries)
         self.model.load_state_dict(curt.state_dict(), strict=False)
@@ -189,7 +194,7 @@ class MaskedCurtCurveModel(LightningModule):
         optimizer = Ranger21(self.model.parameters(),
                              lr=self.hparams.learning_rate,
                              num_epochs=self.trainer.max_epochs,
-                             num_batches_per_epoch=len(self.train_dataloader()))
+                             num_batches_per_epoch=self.batches_per_epoch)
         return optimizer
 
 
