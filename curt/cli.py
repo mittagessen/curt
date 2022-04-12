@@ -88,7 +88,7 @@ def cli(ctx, verbose, seed):
 
 @cli.command('polytrain')
 @click.pass_context
-@click.option('--precision', default=32, type=click.Choice([64, 32, 16]), help='set tensor precision')
+@click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=2, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
@@ -188,6 +188,9 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
+    if precision != 'bf16':
+        precision = int(precision)
+
     trainer = Trainer(default_root_dir=output,
                       precision=precision,
                       max_epochs=epochs,
@@ -204,7 +207,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 
 @cli.command('train')
 @click.pass_context
-@click.option('--precision', default=32, type=click.Choice([64, 32, 16]), help='set tensor precision')
+@click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=2, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
@@ -311,6 +314,9 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
                                batches_per_epoch=len(data_module.train_dataloader()))
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
+
+    if precision != 'bf16':
+        precision = int(precision)
 
     trainer = Trainer(default_root_dir=output,
                       precision=precision,
