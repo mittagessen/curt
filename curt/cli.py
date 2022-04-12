@@ -88,6 +88,7 @@ def cli(ctx, verbose, seed):
 
 @cli.command('polytrain')
 @click.pass_context
+@click.option('--precision', default=32, type=click.Choice([64, 32, 16]), help='set tensor precision')
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=2, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
@@ -97,7 +98,6 @@ def cli(ctx, verbose, seed):
                    'during training. If frequency is >1 it must be an integer, '
                    'i.e. running validation every n-th epoch.')
 @click.option('-lr-drop', '--lr-drop', default=15, help='Reduction factor of learning rate over time')
-@click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
 @click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
 @click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
@@ -131,8 +131,8 @@ def cli(ctx, verbose, seed):
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use (1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-        clip_max_norm, dropout, match_cost_class, match_cost_curve,
+def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
+        dropout, match_cost_class, match_cost_curve,
         curve_loss_coef, eos_coef, mask_loss_coef, dice_loss_coef, load,
         output, partition, training_files, evaluation_files, valid_baselines,
         merge_baselines, merge_all_baselines, workers, device, ground_truth):
@@ -188,7 +188,7 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
     trainer = Trainer(default_root_dir=output,
-                      gradient_clip_val=clip_max_norm,
+                      precision=precision,
                       max_epochs=epochs,
                       auto_select_gpus=True,
                       accelerator='gpu',
@@ -202,6 +202,7 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
 
 @cli.command('train')
 @click.pass_context
+@click.option('--precision', default=32, type=click.Choice([64, 32, 16]), help='set tensor precision')
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=2, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
@@ -211,7 +212,6 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
                    'during training. If frequency is >1 it must be an integer, '
                    'i.e. running validation every n-th epoch.')
 @click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
-@click.option('--clip-max-norm', default=0.1, help='gradient clipping max norm')
 @click.option('--encoder', default='mit_b0', type=click.Choice(['mit_b0', 'mit_b1', 'mit_b2', 'mit_b3', 'mit_b4', 'mit_b5']), help='Encoding max transformers architecture')
 @click.option('-dl', '--decoder-layers', default=3, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
@@ -249,8 +249,8 @@ def polytrain(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_dro
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-          clip_max_norm, encoder, decoder_layers, dim_ff, hidden_dim,
+def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
+          encoder, decoder_layers, dim_ff, hidden_dim,
           dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
@@ -310,7 +310,7 @@ def train(ctx, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
     trainer = Trainer(default_root_dir=output,
-                      gradient_clip_val=clip_max_norm,
+                      precision=precision,
                       max_epochs=epochs,
                       auto_select_gpus=True,
                       accelerator='gpu',
