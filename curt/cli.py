@@ -365,7 +365,7 @@ def pred(ctx, load, suffix, threshold, device, input_files):
                 curves = curves[keep]
                 for line in curves[0]:
                     line = (np.array(line) * (im.size * 4))
-                    line.resize(4, 2)
+                    line = line.resize(4, 2)
                     for t in np.array(BezierCoeff(samples)).dot(line):
                         draw.rectangle((t[0]-2, t[1]-2, t[0]+2, t[1]+2), fill='red')
                 del draw
