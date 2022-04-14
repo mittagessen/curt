@@ -363,11 +363,10 @@ def pred(ctx, load, suffix, threshold, device, input_files):
                 scores, labels = logits.softmax(-1).max(-1)
                 keep = labels.ne(logits.shape[-1] - 1) & (scores > threshold)
                 curves = curves[keep]
-                for line in curves[0]:
+                for line in curves:
                     line = (np.array(line) * (im.size * 4))
-                    line = line.resize(4, 2)
-                    for t in np.array(BezierCoeff(samples)).dot(line):
-                        draw.rectangle((t[0]-2, t[1]-2, t[0]+2, t[1]+2), fill='red')
+                    line.resize(4, 2)
+                    draw.line([tuple(x) for x in np.array(BezierCoeff(samples)).dot(line)], fill=(0, 130, 200, 255), width=2, joint='curve')
                 del draw
                 im.save(fo, format='png')
 
