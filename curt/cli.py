@@ -334,7 +334,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
 @click.pass_context
 @click.option('-i', '--load', help='Input model')
 @click.option('-o', '--suffix', default='.overlay.png', show_default=True, help='Suffix for output files')
-@click.option('-t', '--threshold', default=0.5, show_default=True, help='Minimum score for objectness')
+@click.option('-t', '--threshold', default=0.9, show_default=True, help='Minimum score for objectness')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('input_files', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def pred(ctx, load, suffix, threshold, device, input_files):
@@ -359,10 +359,11 @@ def pred(ctx, load, suffix, threshold, device, input_files):
                     o = curt_model(i)
                 draw = ImageDraw.Draw(im)
                 samples = np.linspace(0, 1, 20)
-                curves, logits = o['pred_curves'].to('cpu'), o['pred_logits'].to('cpu')
+                curves, logits = o['pred_curves'], o['pred_logits']
                 scores, labels = logits.softmax(-1).max(-1)
-                keep = labels.ne(logits.shape[-1] - 1) & (scores > threshold)
+                keep = labels.eq(1) & (scores > threshold)
                 curves = curves[keep]
+                curves = curves.to('cpu')
                 for line in curves:
                     line = (np.array(line) * (im.size * 4))
                     line.resize(4, 2)
