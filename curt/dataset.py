@@ -25,8 +25,8 @@ class CurveDataModule(pl.LightningDataModule):
                  valid_baselines: Sequence[str] = None,
                  merge_baselines: Dict[str, Sequence[str]] = None,
                  merge_all_baselines: bool = False,
-                 max_lines: int = 400,
-                 batch_size: int = 2,
+                 max_lines: int = 200,
+                 batch_size: int = 1,
                  num_workers: int = 2,
                  masks: bool = False):
         super().__init__()
