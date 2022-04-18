@@ -197,6 +197,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
                       auto_select_gpus=True,
                       accelerator='gpu',
                       devices=device,
+                      strategy='ddp',
                       callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
                       batches_per_epoch=len(data_module.train_dataloader()),
                       **val_check_interval)
@@ -324,6 +325,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
                       auto_select_gpus=True,
                       accelerator='gpu',
                       devices=device,
+                      strategy='ddp',
                       callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
                       **val_check_interval)
 
