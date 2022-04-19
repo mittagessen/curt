@@ -11,7 +11,7 @@ from typing import Tuple
 from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
 from curt import mix_transformer
 from curt.head import CurveFormerHead, SegmentationHead
-from curt.matcher import HungarianMatcher
+from curt.matcher import HungarianMatcher, DummyMatcher
 
 
 class CurtCurveModel(LightningModule):
@@ -30,17 +30,19 @@ class CurtCurveModel(LightningModule):
                  num_heads: int = 8,
                  dim_ff: int = 2048,
                  decoder_layers: int = 3,
-                 encoder = 'mit_b0',
-                 batches_per_epoch = None):
+                 encoder: str = 'mit_b0',
+                 set_matcher: bool = True):
         super().__init__()
 
-        self.batches_per_epoch = batches_per_epoch
         self.save_hyperparameters()
 
         self.model = Curt(num_queries=num_queries, num_classes=num_classes, encoder=encoder)
 
-        matcher = HungarianMatcher(cost_class=match_cost_class,
-                                   cost_curve=match_cost_curve)
+        if set_matcher:
+            matcher = HungarianMatcher(cost_class=match_cost_class,
+                                       cost_curve=match_cost_curve)
+        else:
+            matcher = DummyMatcher()
 
         weight_dict = {'loss_ce': 1, 'loss_curves': curve_loss_coef}
 
@@ -138,13 +140,10 @@ class MaskedCurtCurveModel(LightningModule):
                  curve_loss_coef: float = 5.0,
                  mask_loss_coef: float = 1.0,
                  dice_loss_coef: float = 1.0,
-                 eos_coef: float = 0.1,
-                 batches_per_epoch = None):
+                 eos_coef: float = 0.1):
         super().__init__()
 
         self.save_hyperparameters()
-
-        self.batches_per_epoch = batches_per_epoch
 
         self.model = MaskedCurt(num_classes=curt.num_classes, num_queries=curt.num_queries)
         self.model.load_state_dict(curt.state_dict(), strict=False)

@@ -6,6 +6,48 @@ import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 
+class DummyMatcher(nn.Module):
+    """
+    This class computes a dummy assignment between the targets and the
+    predictions of the network, i.e. returns the target indices in order to
+    make the network learn the object order.
+    """
+    def __init__(self, *args, **kwargs):
+        """Creates the matcher
+
+        Params:
+            cost_class: Ignored
+            cost_curve: Ignored
+        """
+        super().__init__()
+
+    @torch.no_grad()
+    def forward(self, outputs, targets):
+        """ Performs the matching
+
+        Params:
+            outputs: This is a dict that contains at least these entries:
+                 "pred_logits": Tensor of dim [batch_size, num_queries, num_classes] with the classification logits
+                 "pred_curves": Tensor of dim [batch_size, num_queries, 8] with the predicted curve coordinates
+
+            targets: This is a list of targets (len(targets) = batch_size), where each target is a dict containing:
+                 "labels": Tensor of dim [num_target_curves] (where num_target_curvesis the number of ground-truth
+                           objects in the target) containing the class labels
+                 "curves": Tensor of dim [num_target_curves, 8] containing the target curve coordinates
+
+        Returns:
+            A list of size batch_size, containing tuples of (index_i, index_j) where:
+                - index_i is the indices of the selected predictions (in order)
+                - index_j is the indices of the corresponding selected targets (in order)
+            For each batch element, it holds:
+                len(index_i) = len(index_j) = min(num_queries, num_target_curves)
+        """
+        num_queries = outputs["pred_logits"].shape[1]
+        sizes = [len(v["curves"]) for v in targets]
+        return [(torch.arange(0, min(q, t), dtype=torch.int64),
+                 torch.arange(0, min(q, t), dtype=torch.int64)) for q, t in zip(num_queries, sizes)]
+
+
 class HungarianMatcher(nn.Module):
     """This class computes an assignment between the targets and the predictions of the network
 
@@ -13,7 +55,6 @@ class HungarianMatcher(nn.Module):
     there are more predictions than targets. In this case, we do a 1-to-1 matching of the best predictions,
     while the others are un-matched (and thus treated as non-objects).
     """
-
     def __init__(self, cost_class: float = 1, cost_curve: float = 1):
         """Creates the matcher
 

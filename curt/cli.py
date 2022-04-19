@@ -252,6 +252,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
               show_default=True,
               default=False,
               help='Merge all baseline types into `default`')
+@click.option('--set-matcher/--dummy-matcher', show_default=True, default=True, help='Use the set criterion or dummy matching.')
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
@@ -260,7 +261,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
           dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
-          merge_all_baselines, workers, device, ground_truth):
+          merge_all_baselines, set_matcher, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -312,7 +313,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
                                dim_ff=dim_ff,
                                encoder=encoder,
                                decoder_layers=decoder_layers,
-                               batches_per_epoch=len(data_module.train_dataloader()))
+                               set_matcher=set_matcher)
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 
