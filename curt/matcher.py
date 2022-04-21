@@ -6,6 +6,8 @@ import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 
+from itertools import zip_longest
+
 class DummyMatcher(nn.Module):
     """
     This class computes a dummy assignment between the targets and the
@@ -45,7 +47,7 @@ class DummyMatcher(nn.Module):
         num_queries = outputs["pred_logits"].shape[1]
         sizes = [len(v["curves"]) for v in targets]
         return [(torch.arange(0, min(q, t), dtype=torch.int64),
-                 torch.arange(0, min(q, t), dtype=torch.int64)) for q, t in zip(num_queries, sizes)]
+                 torch.arange(0, min(q, t), dtype=torch.int64)) for q, t in zip_longest([num_queries], sizes, fillvalue=num_queries)]
 
 
 class HungarianMatcher(nn.Module):
