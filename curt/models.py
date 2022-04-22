@@ -31,7 +31,8 @@ class CurtCurveModel(LightningModule):
                  dim_ff: int = 2048,
                  decoder_layers: int = 3,
                  encoder: str = 'mit_b0',
-                 set_matcher: bool = True):
+                 set_matcher: bool = True,
+                 aux_loss: bool = False):
         super().__init__()
 
         self.save_hyperparameters()
@@ -45,6 +46,12 @@ class CurtCurveModel(LightningModule):
             matcher = DummyMatcher()
 
         weight_dict = {'loss_ce': 1, 'loss_curves': curve_loss_coef}
+
+        if aux_loss:
+            aux_weight_dict = {}
+            for i in range(decoder_layers - 1):
+                aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
+            weight_dict.update(aux_weight_dict)
 
         losses = ['labels', 'curves', 'cardinality']
 
@@ -85,7 +92,13 @@ class CurtCurveModel(LightningModule):
 
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, num_classes: int, num_queries: int, num_decoder_layers: int = 3, encoder: str = 'mit_b0', pretrained: bool = True):
+    def __init__(self,
+                 num_classes: int,
+                 num_queries: int,
+                 num_decoder_layers: int = 3,
+                 encoder: str = 'mit_b0',
+                 pretrained: bool = True,
+                 aux_loss: bool = False):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -102,6 +115,7 @@ class Curt(nn.Module):
         self.num_queries = num_queries
         self.num_decoder_layers = num_decoder_layers
         self.encoder = encoder
+        self.aux_loss = aux_loss
 
         self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
 
@@ -126,7 +140,20 @@ class Curt(nn.Module):
             samples = nested_tensor_from_tensor_list(samples)
         features = self.transformer(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
-        return self.head(features, mask)
+        pred_logits, pred_curves = self.head(features, mask)
+
+        out = {'pred_logits': pred_logits[-1], 'pred_curves': pred_curves[-1]}
+        if self.aux_loss:
+            out['aux_outputs'] = self._set_aux_loss(pred_logits, pred_curves)
+        return out
+
+    @torch.jit.unused
+    def _set_aux_loss(self, pred_logits, pred_curves):
+        # this is a workaround to make torchscript happy, as torchscript
+        # doesn't support dictionary with non-homogeneous values, such
+        # as a dict having both a Tensor and a list.
+        return [{'pred_logits': a, 'pred_curves': b}
+                for a, b in zip(pred_logits[:-1], pred_curves[:-1])]
 
 
 class MaskedCurtCurveModel(LightningModule):
@@ -396,6 +423,18 @@ class SetCriterion(nn.Module):
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_curves))
 
+        # compute auxiliary losses if requested.
+        if 'aux_outputs' in outputs:
+            for i, aux_outputs in enumerate(outputs['aux_outputs']):
+                indices = self.matcher(aux_outputs, targets)
+                for loss in self.losses:
+                    if loss == 'masks':
+                        # Intermediate masks losses are too costly to compute, we ignore them.
+                        continue
+                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_curves)
+                    l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
+                    losses.update(l_dict)
+
         return losses
 
 def dice_loss(inputs, targets, num_curves):
@@ -413,7 +452,7 @@ def dice_loss(inputs, targets, num_curves):
     numerator = 2 * (inputs * targets).sum(1)
     denominator = inputs.sum(-1) + targets.sum(-1)
     loss = 1 - (numerator + 1) / (denominator + 1)
-    return loss.sum() / num_curves 
+    return loss.sum() / num_curves
 
 
 def sigmoid_focal_loss(inputs, targets, num_curves, alpha: float = 0.25, gamma: float = 2):

@@ -111,7 +111,7 @@ class CurveFormerHead(nn.Module):
         output_curves = self.curve_embed(hs).sigmoid()
         output_class = self.class_embed(hs)
 
-        return {'pred_logits': output_class[-1], 'pred_curves': output_curves[-1]}
+        return output_class, output_curves
 
 
 class SegmentationHead(nn.Module):
