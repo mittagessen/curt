@@ -13,6 +13,7 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import pkg_resources
 import math
 
+from typing import Optional, List, Tuple
 
 weight_b0_path = pkg_resources.resource_filename(__name__, 'b0.pth')
 weight_b1_path = pkg_resources.resource_filename(__name__, 'b1.pth')
@@ -23,7 +24,12 @@ weight_b5_path = pkg_resources.resource_filename(__name__, 'b5.pth')
 
 
 class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self,
+                 in_features: int,
+                 hidden_features: Optional[int] = None,
+                 out_features: Optional[int] = None,
+                 act_layer=nn.GELU,
+                 drop: float = 0.):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -50,7 +56,7 @@ class Mlp(nn.Module):
             if m.bias is not None:
                 m.bias.data.zero_()
 
-    def forward(self, x, H, W):
+    def forward(self, x, H: int, W: int):
         x = self.fc1(x)
         x = self.dwconv(x, H, W)
         x = self.act(x)
@@ -61,7 +67,14 @@ class Mlp(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
+    def __init__(self,
+                 dim: int,
+                 num_heads: int = 8,
+                 qkv_bias: bool = False,
+                 qk_scale: Optional[float] = None,
+                 attn_drop: float = 0.,
+                 proj_drop: float = 0.,
+                 sr_ratio: float = 1):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
@@ -80,6 +93,9 @@ class Attention(nn.Module):
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
+        else:
+            self.sr = nn.Identity()
+            self.norm = nn.Identity()
 
         self.apply(self._init_weights)
 
@@ -98,7 +114,7 @@ class Attention(nn.Module):
             if m.bias is not None:
                 m.bias.data.zero_()
 
-    def forward(self, x, H, W):
+    def forward(self, x, H: int, W: int):
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
@@ -124,8 +140,18 @@ class Attention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1):
+    def __init__(self,
+                 dim: int,
+                 num_heads: int,
+                 mlp_ratio: float = 4.,
+                 qkv_bias: bool = False,
+                 qk_scale: Optional[float] = None,
+                 drop: float = 0.,
+                 attn_drop: float = 0.,
+                 drop_path: float = 0.,
+                 act_layer=nn.GELU,
+                 norm_layer=nn.LayerNorm,
+                 sr_ratio: float = 1):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -155,7 +181,7 @@ class Block(nn.Module):
             if m.bias is not None:
                 m.bias.data.zero_()
 
-    def forward(self, x, H, W):
+    def forward(self, x, H: int, W: int):
         x = x + self.drop_path(self.attn(self.norm1(x), H, W))
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
 
@@ -166,7 +192,11 @@ class OverlapPatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, patch_size=(7, 7), stride=4, in_chans=3, embed_dim=768):
+    def __init__(self,
+                 patch_size: Tuple[int, int] = (7, 7),
+                 stride: int = 4,
+                 in_chans: int = 3,
+                 embed_dim: int = 768):
         super().__init__()
 
         self.patch_size = patch_size
@@ -191,7 +221,7 @@ class OverlapPatchEmbed(nn.Module):
             if m.bias is not None:
                 m.bias.data.zero_()
 
-    def forward(self, x):
+    def forward(self, x) -> Tuple[torch.Tensor, int, int]:
         x = self.proj(x)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
@@ -201,10 +231,19 @@ class OverlapPatchEmbed(nn.Module):
 
 
 class MixVisionTransformer(nn.Module):
-    def __init__(self, in_chans=3, embed_dims=[64, 128, 256, 512],
-                 num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
-                 attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
-                 depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1]):
+    def __init__(self,
+                 in_chans: int = 3,
+                 embed_dims: List[int] = [64, 128, 256, 512],
+                 num_heads: List[int] = [1, 2, 4, 8],
+                 mlp_ratios: List[int] = [4, 4, 4, 4],
+                 qkv_bias: bool = False,
+                 qk_scale: Optional[float] = None,
+                 drop_rate: float = 0.,
+                 attn_drop_rate: float = 0.,
+                 drop_path_rate: float = 0.,
+                 norm_layer=nn.LayerNorm,
+                 depths: List[int] = [3, 4, 6, 3],
+                 sr_ratios: List[int] = [8, 4, 2, 1]):
         super().__init__()
         self.depths = depths
         self.embed_dims = embed_dims
@@ -296,7 +335,7 @@ class MixVisionTransformer(nn.Module):
     def freeze_patch_emb(self):
         self.patch_embed1.requires_grad = False
 
-    def forward(self, x):
+    def forward(self, x) -> List[torch.Tensor]:
         B = x.shape[0]
         outs = []
 
@@ -335,11 +374,11 @@ class MixVisionTransformer(nn.Module):
 
 
 class DWConv(nn.Module):
-    def __init__(self, dim=768):
+    def __init__(self, dim: int = 768):
         super(DWConv, self).__init__()
         self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
 
-    def forward(self, x, H, W):
+    def forward(self, x, H: int, W: int):
         B, N, C = x.shape
         x = x.transpose(1, 2).view(B, C, H, W)
         x = self.dwconv(x)
@@ -349,7 +388,7 @@ class DWConv(nn.Module):
 
 
 class mit_b0(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b0, self).__init__(
             embed_dims=[32, 64, 160, 256], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
@@ -359,7 +398,7 @@ class mit_b0(MixVisionTransformer):
 
 
 class mit_b1(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b1, self).__init__(
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
@@ -369,7 +408,7 @@ class mit_b1(MixVisionTransformer):
 
 
 class mit_b2(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b2, self).__init__(
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
@@ -379,7 +418,7 @@ class mit_b2(MixVisionTransformer):
 
 
 class mit_b3(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b3, self).__init__(
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
@@ -389,7 +428,7 @@ class mit_b3(MixVisionTransformer):
 
 
 class mit_b4(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b4, self).__init__(
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
@@ -399,7 +438,7 @@ class mit_b4(MixVisionTransformer):
 
 
 class mit_b5(MixVisionTransformer):
-    def __init__(self, pretrained=False, **kwargs):
+    def __init__(self, pretrained: bool = False, **kwargs):
         super(mit_b5, self).__init__(
             embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
