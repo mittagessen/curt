@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from torch import Tensor, nn
 
@@ -11,7 +11,9 @@ class MLP(nn.Module):
     """
     Linear Embedding
     """
-    def __init__(self, input_dim=2048, embed_dim=768):
+    def __init__(self,
+                 input_dim: int = 2048,
+                 embed_dim: int = 768):
         super().__init__()
         self.proj = nn.Linear(input_dim, embed_dim)
 
@@ -24,7 +26,11 @@ class MLP(nn.Module):
 class CurveHead(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
 
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int,
+                 num_layers: int):
         super().__init__()
         self.num_layers = num_layers
         h = [hidden_dim] * (num_layers - 1)
@@ -41,16 +47,16 @@ class CurveFormerHead(nn.Module):
     A simple decoder for quadratic curves.
     """
     def __init__(self,
-                 in_channels=[32, 64, 160, 256],
-                 num_queries=400,
-                 num_classes=1,
-                 embedding_dim=256,
-                 dropout_ratio=0.1,
-                 nhead=8,
-                 dim_feedforward=2048,
-                 activation='relu',
-                 normalize_before=False,
-                 num_decoder_layers=3):
+                 in_channels: Tuple[int, int, int, int] = (32, 64, 160, 256),
+                 num_queries: int = 400,
+                 num_classes: int = 1,
+                 embedding_dim: int = 256,
+                 dropout_ratio: float = 0.1,
+                 nhead: int = 8,
+                 dim_feedforward: int = 2048,
+                 activation: str = 'relu',
+                 normalize_before: bool = False,
+                 num_decoder_layers: int = 3):
         super().__init__()
         self.in_channels = in_channels
         self.embedding_dim = embedding_dim
@@ -79,7 +85,9 @@ class CurveFormerHead(nn.Module):
         self.curve_embed = CurveHead(embedding_dim, embedding_dim, 8, 3)
         self.class_embed = nn.Linear(embedding_dim, num_classes+1)
 
-    def forward(self, features, mask):
+    def forward(self,
+                features: Tuple[Tensor, Tensor, Tensor, Tensor],
+                mask) -> Tuple[Tensor, Tensor]:
         c1, c2, c3, c4 = features
 
         ############## MLP decoder on C1-C4 ###########
@@ -132,7 +140,9 @@ class SegmentationHead(nn.Module):
         self.curve_attention = MHAttentionMap(hidden_dim, hidden_dim, num_heads)
         self.mask_head = MaskHeadSmallConv(hidden_dim,  num_heads, 32)
 
-    def forward(self, features, mask):
+    def forward(self,
+                features: Tuple[Tensor, Tensor, Tensor, Tensor],
+                mask):
         c1, c2, c3, c4 = features
 
         ############## MLP decoder on C1-C4 ###########
@@ -180,7 +190,7 @@ class MaskHeadSmallConv(nn.Module):
     """
     Simple convolutional head with a bottleneck layer.
     """
-    def __init__(self, feature_dim, att_dim, inter_dim):
+    def __init__(self, feature_dim: int, att_dim: int, inter_dim: int):
         super().__init__()
         self.bottle_conv = torch.nn.Conv2d(feature_dim, inter_dim, 1)
         self.gn1 = torch.nn.GroupNorm(8, inter_dim)
@@ -217,7 +227,7 @@ class MHAttentionMap(nn.Module):
     multiplication by value)
     """
 
-    def __init__(self, query_dim, hidden_dim, num_heads, bias=True):
+    def __init__(self, query_dim: int, hidden_dim: int, num_heads: int, bias: bool = True):
         super().__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
@@ -246,7 +256,7 @@ class MHAttentionMap(nn.Module):
 
 class TransformerDecoder(nn.Module):
 
-    def __init__(self, decoder_layer, num_layers, norm=None):
+    def __init__(self, decoder_layer, num_layers: int, norm=None):
         super().__init__()
         self.layers = _get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
@@ -275,8 +285,8 @@ class TransformerDecoder(nn.Module):
 
 class TransformerDecoderLayer(nn.Module):
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False):
+    def __init__(self, d_model, nhead, dim_feedforward: int = 2048, dropout: float = 0.1,
+                 activation: str = "relu", normalize_before: bool = False):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
         self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
