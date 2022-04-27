@@ -76,7 +76,7 @@ class CurveFormerHead(nn.Module):
         self.dropout = nn.Dropout2d(dropout)
 
         decoder_layer = TransformerDecoderLayer(embedding_dim, nhead, dim_feedforward,
-                                                dropout_ratio, activation, normalize_before)
+                                                dropout, activation, normalize_before)
 
         decoder_norm = nn.LayerNorm(embedding_dim)
         self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
