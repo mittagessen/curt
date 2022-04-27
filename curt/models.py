@@ -42,7 +42,7 @@ class CurtCurveModel(LightningModule):
                           encoder=encoder,
                           embedding_dim=embedding_dim,
                           dropout=dropout,
-                          nhead=num_heads,
+                          num_heads=num_heads,
                           dim_feedforward=dim_ff,
                           aux_loss=aux_loss)
 
