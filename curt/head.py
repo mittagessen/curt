@@ -51,7 +51,7 @@ class CurveFormerHead(nn.Module):
                  num_queries: int = 400,
                  num_classes: int = 1,
                  embedding_dim: int = 256,
-                 dropout_ratio: float = 0.1,
+                 dropout: float = 0.1,
                  nhead: int = 8,
                  dim_feedforward: int = 2048,
                  activation: str = 'relu',
@@ -73,7 +73,7 @@ class CurveFormerHead(nn.Module):
 
         self.conv = nn.Conv2d(embedding_dim*4, embedding_dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
         self.bn = nn.BatchNorm2d(embedding_dim)
-        self.dropout = nn.Dropout2d(dropout_ratio)
+        self.dropout = nn.Dropout2d(dropout)
 
         decoder_layer = TransformerDecoderLayer(embedding_dim, nhead, dim_feedforward,
                                                 dropout_ratio, activation, normalize_before)

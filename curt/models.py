@@ -41,7 +41,7 @@ class CurtCurveModel(LightningModule):
                           num_classes=num_classes,
                           encoder=encoder,
                           embedding_dim=embedding_dim,
-                          dropout_ratio=dropout,
+                          dropout=dropout,
                           nhead=num_heads,
                           dim_feedforward=dim_ff,
                           aux_loss=aux_loss)
@@ -135,7 +135,7 @@ class Curt(nn.Module):
                                     num_classes=num_classes,
                                     num_decoder_layers=num_decoder_layers,
                                     embedding_dim=embedding_dim,
-                                    dropout_ratio=dropout,
+                                    dropout=dropout,
                                     nhead=num_heads,
                                     dim_feedforward=dim_ff)
 
