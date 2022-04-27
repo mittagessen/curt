@@ -25,7 +25,7 @@ class CurtCurveModel(LightningModule):
                  match_cost_curve: float = 5.0,
                  curve_loss_coef: float = 5.0,
                  eos_coef: float = 0.1,
-                 hidden_dim: int = 256,
+                 embedding_dim: int = 256,
                  dropout: float = 0.1,
                  num_heads: int = 8,
                  dim_ff: int = 2048,
@@ -37,7 +37,14 @@ class CurtCurveModel(LightningModule):
 
         self.save_hyperparameters()
 
-        self.model = Curt(num_queries=num_queries, num_classes=num_classes, encoder=encoder)
+        self.model = Curt(num_queries=num_queries,
+                          num_classes=num_classes,
+                          encoder=encoder,
+                          embedding_dim=embedding_dim,
+                          dropout_ratio=dropout,
+                          nhead=num_heads,
+                          dim_feedforward=dim_ff,
+                          aux_loss=aux_loss)
 
         if set_matcher:
             matcher = HungarianMatcher(cost_class=match_cost_class,
@@ -96,6 +103,10 @@ class Curt(nn.Module):
                  num_classes: int,
                  num_queries: int,
                  num_decoder_layers: int = 3,
+                 embedding_dim: int = 256,
+                 dropout: float = 0.1,
+                 num_heads: int = 8,
+                 dim_ff: int = 2048,
                  encoder: str = 'mit_b0',
                  pretrained: bool = True,
                  aux_loss: bool = False):
@@ -122,7 +133,11 @@ class Curt(nn.Module):
         self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
                                     num_queries=num_queries,
                                     num_classes=num_classes,
-                                    num_decoder_layers=num_decoder_layers)
+                                    num_decoder_layers=num_decoder_layers,
+                                    embedding_dim=embedding_dim,
+                                    dropout_ratio=dropout,
+                                    nhead=num_heads,
+                                    dim_feedforward=dim_ff)
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:

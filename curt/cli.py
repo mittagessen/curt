@@ -221,7 +221,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 @click.option('--encoder', default='mit_b0', type=click.Choice(['mit_b0', 'mit_b1', 'mit_b2', 'mit_b3', 'mit_b4', 'mit_b5']), help='Encoding max transformers architecture')
 @click.option('-dl', '--decoder-layers', default=3, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
-@click.option('-hdd', '--hidden-dim', default=256, help='Size of the embeddings (dimension of the transformer')
+@click.option('-edd', '--embedding-dim', default=256, help='Size of the embeddings (dimension of the transformer')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
 @click.option('-nh', '--num-heads', default=8, help="Number of attention heads inside the transformer's attentions")
 @click.option('-nq', '--num-queries', default=500, help='Number of query slots (#lines + #regions detectable in an image)')
@@ -258,7 +258,7 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-          encoder, decoder_layers, dim_ff, hidden_dim,
+          encoder, decoder_layers, dim_ff, embedding_dim,
           dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
@@ -308,7 +308,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
                                match_cost_curve=match_cost_curve,
                                curve_loss_coef=curve_loss_coef,
                                eos_coef=eos_coef,
-                               hidden_dim=hidden_dim,
+                               embedding_dim=embedding_dim,
                                dropout=dropout,
                                num_heads=num_heads,
                                dim_ff=dim_ff,
