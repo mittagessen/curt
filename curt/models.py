@@ -43,7 +43,7 @@ class CurtCurveModel(LightningModule):
                           embedding_dim=embedding_dim,
                           dropout=dropout,
                           num_heads=num_heads,
-                          dim_feedforward=dim_ff,
+                          dim_ff=dim_ff,
                           aux_loss=aux_loss)
 
         if set_matcher:
