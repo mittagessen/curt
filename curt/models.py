@@ -18,7 +18,8 @@ class CurtCurveModel(LightningModule):
     def __init__(self,
                  num_classes: int,
                  num_queries: int = 200,
-                 learning_rate: float = 1e-4,
+                 learning_rate: float = 6e-5,
+                 backbone_learning_rate: float = 6e-6,
                  weight_decay: float = 1e-4,
                  lr_drop: int = 200,
                  match_cost_class: float = 1.0,
@@ -90,9 +91,18 @@ class CurtCurveModel(LightningModule):
                        sync_dist=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.model.parameters(),
+        param_dicts = [
+            {"params": [p for n, p in self.model.named_parameters() if 'transformer' not in n and p.requires_grad]},
+            {
+                "params": [p for n, p in self.model.named_parameters() if 'transformer' in n and p.requires_grad],
+                "lr": self.hparams.backbone_learning_rate,
+            },
+        ]
+
+        optimizer = torch.optim.AdamW(param_dicts,
                                       lr=self.hparams.learning_rate,
                                       weight_decay=self.hparams.weight_decay)
+
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 

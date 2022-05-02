@@ -89,9 +89,10 @@ def cli(ctx, verbose, seed):
 @cli.command('polytrain')
 @click.pass_context
 @click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
-@click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
-@click.option('-B', '--batch-size', default=2, help='Batch size')
-@click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
+@click.option('-lr', '--learning-rate', default=0.0006,, help='Learning rate')
+@click.option('-blr', '--backbone-learning-rate', default=0.00006, help='Learning rate')
+@click.option('-B', '--batch-size', default=1, help='Batch size')
+@click.option('-w', '--weight-decay', default=0.01, help='Weight decay in optimizer')
 @click.option('-N', '--epochs', default=25, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
@@ -131,11 +132,12 @@ def cli(ctx, verbose, seed):
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use (1, ...)')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-        dropout, match_cost_class, match_cost_curve,
-        curve_loss_coef, eos_coef, mask_loss_coef, dice_loss_coef, load,
-        output, partition, training_files, evaluation_files, valid_baselines,
-        merge_baselines, merge_all_baselines, workers, device, ground_truth):
+def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
+              batch_size, weight_decay, epochs, freq, lr_drop, dropout,
+              match_cost_class, match_cost_curve, curve_loss_coef, eos_coef,
+              mask_loss_coef, dice_loss_coef, load, output, partition,
+              training_files, evaluation_files, valid_baselines, merge_baselines,
+              merge_all_baselines, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -209,9 +211,10 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 @cli.command('train')
 @click.pass_context
 @click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
-@click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
-@click.option('-B', '--batch-size', default=2, help='Batch size')
-@click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
+@click.option('-lr', '--learning-rate', default=0.0006,, help='Learning rate')
+@click.option('-blr', '--backbone-learning-rate', default=0.00006, help='Learning rate')
+@click.option('-B', '--batch-size', default=1, help='Batch size')
+@click.option('-w', '--weight-decay', default=0.01, help='Weight decay in optimizer')
 @click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
@@ -257,12 +260,13 @@ def polytrain(ctx, precision, learning_rate, batch_size, weight_decay, epochs, f
 @click.option('--workers', show_default=True, default=2, help='Number of data loader workers.')
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
-def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq, lr_drop,
-          encoder, decoder_layers, dim_ff, embedding_dim,
-          dropout, num_heads, num_queries, match_cost_class,
+def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
+          weight_decay, epochs, freq, lr_drop, encoder, decoder_layers, dim_ff,
+          embedding_dim, dropout, num_heads, num_queries, match_cost_class,
           match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
           training_files, evaluation_files, valid_baselines, merge_baselines,
-          merge_all_baselines, set_matcher, aux_loss, workers, device, ground_truth):
+          merge_all_baselines, set_matcher, aux_loss, workers, device,
+          ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -302,6 +306,7 @@ def train(ctx, precision, learning_rate, batch_size, weight_decay, epochs, freq,
         model = CurtCurveModel(data_module.num_classes,
                                num_queries=num_queries,
                                learning_rate=learning_rate,
+                               backbone_learning_rate=backbone_learning_rate,
                                weight_decay=weight_decay,
                                lr_drop=lr_drop,
                                match_cost_class=match_cost_class,
