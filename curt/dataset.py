@@ -28,29 +28,31 @@ class CurveDataModule(pl.LightningDataModule):
                  max_lines: int = 200,
                  batch_size: int = 1,
                  num_workers: int = 2,
-                 masks: bool = False):
+                 masks: bool = False,
+                 max_size: int = 1800):
         super().__init__()
 
         self.save_hyperparameters()
 
-        scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
         normalize = tf.Compose([tf.ToTensor(),
                                 tf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
                                 tf.BezierFit()])
 
+        scales = list(range(max_size//2, max_size, max_size//20)) + [max_size]
+
         self._train_transforms = tf.Compose([tf.RandomSelect(
-                                                 tf.RandomResize(scales, max_size=1333),
+                                                 tf.RandomResize(scales, max_size=max_size),
                                                  tf.Compose([
-                                                     tf.RandomResize([400, 500, 600]),
-                                                     tf.RandomSizeCrop(384, 600),
-                                                     tf.RandomResize(scales, max_size=1333),
+                                                     tf.RandomResize(scales[-3:]),
+                                                     tf.RandomSizeCrop(scales[0], scales[-3]),
+                                                     tf.RandomResize(scales, max_size=max_size),
                                                  ])
                                              ),
                                              tf.PhotometricDistortion(),
                                              normalize,
                                          ])
 
-        self._val_transforms = tf.Compose([tf.RandomResize([800], max_size=1333),
+        self._val_transforms = tf.Compose([tf.RandomResize([scales[-1]], max_size=max_size),
                                            normalize])
 
         train_set = BaselineSet(self.hparams.train_files,
