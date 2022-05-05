@@ -89,7 +89,7 @@ def cli(ctx, verbose, seed):
 @cli.command('polytrain')
 @click.pass_context
 @click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
-@click.option('-lr', '--learning-rate', default=0.0006,, help='Learning rate')
+@click.option('-lr', '--learning-rate', default=0.0006, help='Learning rate')
 @click.option('-blr', '--backbone-learning-rate', default=0.00006, help='Learning rate')
 @click.option('-B', '--batch-size', default=1, help='Batch size')
 @click.option('-w', '--weight-decay', default=0.01, help='Weight decay in optimizer')
@@ -211,10 +211,10 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @cli.command('train')
 @click.pass_context
 @click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
-@click.option('-lr', '--learning-rate', default=0.0006,, help='Learning rate')
-@click.option('-blr', '--backbone-learning-rate', default=0.00006, help='Learning rate')
+@click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
+@click.option('-blr', '--backbone-learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=1, help='Batch size')
-@click.option('-w', '--weight-decay', default=0.01, help='Weight decay in optimizer')
+@click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
 @click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
