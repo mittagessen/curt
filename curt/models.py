@@ -299,6 +299,37 @@ class MaskedCurt(nn.Module):
         self.mask_head = SegmentationHead(self.head)
 
 
+# taken from pytorch_toolbelt
+def wing_loss(output: torch.Tensor, target: torch.Tensor, width=5, curvature=0.5, reduction="mean"):
+    """
+    https://arxiv.org/pdf/1711.06753.pdf
+    :param output:
+    :param target:
+    :param width:
+    :param curvature:
+    :param reduction:
+    :return:
+    """
+    diff_abs = (target - output).abs()
+    loss = diff_abs.clone()
+
+    idx_smaller = diff_abs < width
+    idx_bigger = diff_abs >= width
+
+    loss[idx_smaller] = width * torch.log(1 + diff_abs[idx_smaller] / curvature)
+
+    C = width - width * math.log(1 + width / curvature)
+    loss[idx_bigger] = loss[idx_bigger] - C
+
+    if reduction == "sum":
+        loss = loss.sum()
+
+    if reduction == "mean":
+        loss = loss.mean()
+
+    return loss
+
+
 class SetCriterion(nn.Module):
     """ This class computes the loss for DETR.
     The process happens in two steps:
@@ -370,7 +401,7 @@ class SetCriterion(nn.Module):
         src_curves = outputs['pred_curves'][idx]
         target_curves = torch.cat([t['curves'][i] for t, (_, i) in zip(targets, indices)], dim=0)
 
-        loss_curves = F.l1_loss(src_curves, target_curves, reduction='none')
+        loss_curves = wing_loss(src_curves, target_curves, reduction='none')
 
         losses = {}
         losses['loss_curves'] = loss_curves.sum() / num_curves
