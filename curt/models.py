@@ -1,6 +1,7 @@
 """
 CURT model and criterion classes.
 """
+import math
 import torch
 import torch.nn.functional as F
 
@@ -300,7 +301,7 @@ class MaskedCurt(nn.Module):
 
 
 # taken from pytorch_toolbelt
-def wing_loss(output: torch.Tensor, target: torch.Tensor, width=5, curvature=0.5, reduction="mean"):
+def wing_loss(output: torch.Tensor, target: torch.Tensor, width=5, curvature=2.0, reduction="mean"):
     """
     https://arxiv.org/pdf/1711.06753.pdf
     :param output:
