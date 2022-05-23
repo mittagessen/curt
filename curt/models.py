@@ -12,7 +12,7 @@ from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accurac
 from curt.head import CurveFormerHead, SegmentationHead, CurveHead
 from curt.matcher import HungarianMatcher, DummyMatcher
 from curt.detr_transformer import Transformer
-
+from curt.detr_stuff import Backbone
 
 class CurtCurveModel(LightningModule):
     def __init__(self,
@@ -136,7 +136,7 @@ class Curt(nn.Module):
         self.aux_loss = aux_loss
 
 #        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
-        self.backbone = detr_stuff.Backbone(True, False)
+        self.backbone = Backbone(True, False)
         self.transformer = Transformer(d_model=embedding_dim,
                                        dropout=dropout,
                                        nhead=num_heads,
