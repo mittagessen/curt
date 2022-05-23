@@ -100,7 +100,7 @@ class PositionEmbeddingSine(nn.Module):
         self.scale = scale
 
     def forward(self, x):
-        mask = torch.ones_like(x[0])
+        mask = torch.ones((x.shape[0],) +  x.shape[2:])
         y_embed = mask.cumsum(1, dtype=torch.float32)
         x_embed = mask.cumsum(2, dtype=torch.float32)
         if self.normalize:
