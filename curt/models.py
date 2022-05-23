@@ -133,7 +133,6 @@ class Curt(nn.Module):
         self.num_classes = num_classes
         self.num_queries = num_queries
         self.num_decoder_layers = num_decoder_layers
-        self.encoder = encoder
         self.aux_loss = aux_loss
 
 #        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
