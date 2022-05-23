@@ -9,9 +9,9 @@ from pytorch_lightning import LightningModule
 from typing import Tuple
 
 from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
-from curt import mix_transformer
-from curt.head import CurveFormerHead, SegmentationHead
+from curt.head import CurveFormerHead, SegmentationHead, CurveHead
 from curt.matcher import HungarianMatcher, DummyMatcher
+from curt.detr_transformer import Transformer
 
 
 class CurtCurveModel(LightningModule):
@@ -92,9 +92,9 @@ class CurtCurveModel(LightningModule):
 
     def configure_optimizers(self):
         param_dicts = [
-            {"params": [p for n, p in self.model.named_parameters() if 'transformer' not in n and p.requires_grad]},
+            {"params": [p for n, p in self.model.named_parameters() if 'backbone' not in n and p.requires_grad]},
             {
-                "params": [p for n, p in self.model.named_parameters() if 'transformer' in n and p.requires_grad],
+                "params": [p for n, p in self.model.named_parameters() if 'backbone' in n and p.requires_grad],
                 "lr": self.hparams.backbone_learning_rate,
             },
         ]
@@ -117,7 +117,6 @@ class Curt(nn.Module):
                  dropout: float = 0.1,
                  num_heads: int = 8,
                  dim_ff: int = 2048,
-                 encoder: str = 'mit_b0',
                  pretrained: bool = True,
                  aux_loss: bool = False):
         """ Initializes the model.
@@ -138,16 +137,21 @@ class Curt(nn.Module):
         self.encoder = encoder
         self.aux_loss = aux_loss
 
-        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
+#        self.transformer = getattr(mix_transformer, encoder)(pretrained=pretrained)
+        self.backbone = detr_stuff.Backbone(True, False)
+        self.transformer = Transformer(d_model=embedding_dim,
+                                       dropout=dropout,
+                                       nhead=num_heads,
+                                       dim_feedforward=dim_ff,
+                                       num_encoder_layers=num_decoder_layers,
+                                       num_decoder_layers=num_encoder_layers,
+                                       normalize_before=False,
+                                       return_intermediate_dec=True)
+        self.input_proj = nn.Conv2d(self.backbone.num_channels, embedding_dim, kernel_size=1)
+        self.query_embed = nn.Embedding(num_queries, embedding_dim)
 
-        self.head = CurveFormerHead(in_channels=self.transformer.embed_dims,
-                                    num_queries=num_queries,
-                                    num_classes=num_classes,
-                                    num_decoder_layers=num_decoder_layers,
-                                    embedding_dim=embedding_dim,
-                                    dropout=dropout,
-                                    nhead=num_heads,
-                                    dim_feedforward=dim_ff)
+        self.curve_embed = CurveHead(embedding_dim, embedding_dim, 8, 3)
+        self.class_embed = nn.Linear(embedding_dim, num_classes+1)
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -161,11 +165,12 @@ class Curt(nn.Module):
                                 (x0, y0, x1, y1, x2, y2, x3, y3). These values are normalized in [0, 1],
                                 relative to the size of each individual image (disregarding possible padding).
         """
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
-        features = self.transformer(samples.tensors)
-        mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features[0].shape[-2:]).to(torch.bool).squeeze(1)
-        pred_logits, pred_curves = self.head(features, mask)
+        features, pos = self.backbone(samples.tensors)
+        mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features.shape[-2:]).to(torch.bool).squeeze(1)
+        hs = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos[-1])[0]
+
+        pred_logits = self.class_embed(hs)
+        pred_curves = self.curve_embed(hs).sigmoid()
 
         out = {'pred_logits': pred_logits[-1], 'pred_curves': pred_curves[-1]}
         if self.aux_loss:
