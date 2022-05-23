@@ -6,8 +6,6 @@ import torch.nn.functional as F
 
 from torch import nn
 from pytorch_lightning import LightningModule
-from timm.scheduler import StepLRScheduler
-
 from typing import Tuple
 
 from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
@@ -104,7 +102,7 @@ class CurtCurveModel(LightningModule):
                                       lr=self.hparams.learning_rate,
                                       weight_decay=self.hparams.weight_decay)
 
-        lr_scheduler = StepLRScheduler(optimizer, self.hparams.lr_drop, 0.1, warmup_t=5, warmup_lr_init=1e-10)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 
 
