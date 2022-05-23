@@ -142,7 +142,7 @@ class Curt(nn.Module):
                                        nhead=num_heads,
                                        dim_feedforward=dim_ff,
                                        num_encoder_layers=num_decoder_layers,
-                                       num_decoder_layers=num_encoder_layers,
+                                       num_decoder_layers=num_decoder_layers,
                                        normalize_before=False,
                                        return_intermediate_dec=True)
         self.input_proj = nn.Conv2d(self.backbone.num_channels, embedding_dim, kernel_size=1)
