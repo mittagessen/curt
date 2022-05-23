@@ -165,7 +165,7 @@ class Curt(nn.Module):
         """
         features, pos = self.backbone(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features.shape[-2:]).to(torch.bool).squeeze(1)
-        hs = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos)[0]
+        hs = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos[-1])[0]
 
         pred_logits = self.class_embed(hs)
         pred_curves = self.curve_embed(hs).sigmoid()
