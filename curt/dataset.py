@@ -29,7 +29,7 @@ class CurveDataModule(pl.LightningDataModule):
                  batch_size: int = 1,
                  num_workers: int = 2,
                  masks: bool = False,
-                 max_size: int = 1800):
+                 max_size: int = 900):
         super().__init__()
 
         self.save_hyperparameters()
