@@ -40,7 +40,6 @@ class CurtCurveModel(LightningModule):
 
         self.model = Curt(num_queries=num_queries,
                           num_classes=num_classes,
-                          encoder=encoder,
                           embedding_dim=embedding_dim,
                           dropout=dropout,
                           num_heads=num_heads,
