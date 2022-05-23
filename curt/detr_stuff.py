@@ -129,7 +129,7 @@ class Backbone(nn.Module):
                                           out_indices=None if return_interm_layers else (2,))
         self.pos_embed = PositionEmbeddingSine(transformer_dim//2, normalize=True)
         self.return_interm_layers = return_interm_layers
-        self.num_channels = self.backbone.feature_info.channels(-1)
+        self.num_channels = self.backbone.feature_info.channels()[0]
 
     def forward(self, inputs: torch.Tensor):
         o = self.backbone(inputs)
