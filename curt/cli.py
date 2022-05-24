@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 from pathlib import Path
 from rich.logging import RichHandler
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
+from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging, LearningRateMonitor
 
 from curt.models import CurtCurveModel, MaskedCurtCurveModel
 from curt.dataset import CurveDataModule
@@ -336,7 +336,7 @@ def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
                       accelerator='gpu',
                       devices=device,
                       strategy='ddp',
-                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs))],
+                      callbacks=[KrakenTrainProgressBar(), checkpoint_cb, StochasticWeightAveraging(swa_epoch_start=0.8, annealing_epochs=int(0.2*epochs)), LearningRateMonitor(logging_interval='step')],
                       **val_check_interval)
 
     trainer.fit(model, data_module)
