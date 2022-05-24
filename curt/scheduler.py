@@ -1,3 +1,4 @@
+from torch.optim.lr_scheduler import LambdaLR
 import math
 
 def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps: int, num_training_steps: int, num_cycles: float = 0.5, last_epoch: int = -1):
