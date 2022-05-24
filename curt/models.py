@@ -109,7 +109,7 @@ class CurtCurveModel(LightningModule):
                                                        num_warmup_steps=8000,
                                                        num_training_steps=self.hparams.batches_per_epoch*self.hparams.num_epochs)
 
-        return [optimizer], [{'lr_scheduler': lr_scheduler, 'interval': 'step'}]
+        return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
 
 class Curt(nn.Module):
