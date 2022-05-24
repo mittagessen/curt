@@ -320,7 +320,9 @@ def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
                                encoder=encoder,
                                decoder_layers=decoder_layers,
                                set_matcher=set_matcher,
-                               aux_loss=aux_loss)
+                               aux_loss=aux_loss,
+                               batches_per_epoch=len(data_module.train_dataloader()//batch_size),
+                               num_epochs=epochs)
 
     checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
 

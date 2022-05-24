@@ -13,6 +13,7 @@ from curt.head import CurveFormerHead, SegmentationHead, CurveHead
 from curt.matcher import HungarianMatcher, DummyMatcher
 from curt.detr_transformer import Transformer
 from curt.detr_stuff import Backbone
+from curt.scheduler import get_cosine_schedule_with_warmup
 
 class CurtCurveModel(LightningModule):
     def __init__(self,
@@ -33,7 +34,9 @@ class CurtCurveModel(LightningModule):
                  decoder_layers: int = 3,
                  encoder: str = 'mit_b0',
                  set_matcher: bool = True,
-                 aux_loss: bool = False):
+                 aux_loss: bool = False,
+                 batches_per_epoch: int = -1,
+                 num_epochs: int = -1):
         super().__init__()
 
         self.save_hyperparameters()
@@ -102,7 +105,10 @@ class CurtCurveModel(LightningModule):
                                       lr=self.hparams.learning_rate,
                                       weight_decay=self.hparams.weight_decay)
 
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
+        lr_scheduler = get_cosine_schedule_with_warmup(optimizer,
+                                                       num_warmup_steps=8000,
+                                                       num_training_steps=self.hparams.batches_per_epoch*self.hparams.num_epochs)
+
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 
 
