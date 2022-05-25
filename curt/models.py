@@ -71,6 +71,8 @@ class CurtCurveModel(LightningModule):
     def training_step(self, batch, batch_idx):
         samples, targets = batch
         outputs = self.model(samples)
+        if outputs['pred_curves'].isnan().any() or outputs['pred_logits'].isnan().any():
+            return None
         loss_dict = self.criterion(outputs, targets)
         weight_dict = self.criterion.weight_dict
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
