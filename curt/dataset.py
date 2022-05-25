@@ -29,7 +29,7 @@ class CurveDataModule(pl.LightningDataModule):
                  batch_size: int = 1,
                  num_workers: int = 2,
                  masks: bool = False,
-                 max_size: int = 900):
+                 max_size: int = 850):
         super().__init__()
 
         self.save_hyperparameters()
@@ -176,7 +176,10 @@ class BaselineSet(Dataset):
     def __getitem__(self, idx):
         im = self.imgs[idx]
         target = self.targets[idx]
-        return self._transforms(Image.open(im).convert('RGB'), target)
+        o = None
+        while not o or not len(o[1]['curves']):
+            o = self._transforms(Image.open(im).convert('RGB'), target)
+        return o
 
     def __len__(self):
         return len(self.imgs)
