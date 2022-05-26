@@ -76,7 +76,7 @@ class CurtCurveModel(LightningModule):
         loss_dict = self.criterion(outputs, targets)
         weight_dict = self.criterion.weight_dict
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
-        self.log('loss', losses)
+        self.log('loss', losses, on_epoch=False)
         return losses
 
     def validation_step(self, batch, batch_idx):
