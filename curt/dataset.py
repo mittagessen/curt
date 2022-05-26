@@ -10,10 +10,10 @@ import curt.transforms as tf
 from PIL import Image
 from torch.utils.data import Dataset
 from typing import Dict, Sequence, Callable, Any, Union, Optional
-from kraken.lib.xml import parse_xml
 from torch.utils.data import DataLoader, random_split, Subset
 from shapely.geometry import LineString
 
+from curt.xml import parse_xml
 from curt.util.misc import collate_fn
 
 
