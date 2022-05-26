@@ -113,6 +113,9 @@ class CurtCurveModel(LightningModule):
 
         return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
+    def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
+        optimizer.zero_grad(set_to_none=True)
+
 
 class Curt(nn.Module):
     """ This is the DETR module that performs object detection """
