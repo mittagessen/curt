@@ -214,6 +214,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-blr', '--backbone-learning-rate', default=1e-4, help='Learning rate')
 @click.option('-B', '--batch-size', default=1, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
+@click.option('-c', '--clip-norm', default=0.1, help='Gradient clipping threshold')
 @click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
@@ -260,12 +261,12 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
-          weight_decay, epochs, freq, lr_drop, encoder, decoder_layers, dim_ff,
-          embedding_dim, dropout, num_heads, num_queries, match_cost_class,
-          match_cost_curve, curve_loss_coef, eos_coef, load, output, partition,
-          training_files, evaluation_files, valid_baselines, merge_baselines,
-          merge_all_baselines, set_matcher, aux_loss, workers, device,
-          ground_truth):
+          weight_decay, clip_norm, epochs, freq, lr_drop, encoder,
+          decoder_layers, dim_ff, embedding_dim, dropout, num_heads,
+          num_queries, match_cost_class, match_cost_curve, curve_loss_coef,
+          eos_coef, load, output, partition, training_files, evaluation_files,
+          valid_baselines, merge_baselines, merge_all_baselines, set_matcher,
+          aux_loss, workers, device, ground_truth):
 
     if evaluation_files:
         partition = 1
@@ -335,6 +336,7 @@ def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
                       accelerator='gpu',
                       devices=device,
                       callbacks=[KrakenTrainProgressBar(), checkpoint_cb],
+                      gradient_clip_val=clip_norm,
                       **val_check_interval)
 
     trainer.fit(model, data_module)
