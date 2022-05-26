@@ -88,13 +88,15 @@ class CurveDataModule(pl.LightningDataModule):
         return DataLoader(self.curve_train,
                           collate_fn=collate_fn,
                           batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers)
+                          num_workers=self.hparams.num_workers,
+                          pin_memory=True)
 
     def val_dataloader(self):
         return DataLoader(self.curve_val,
                           collate_fn=collate_fn,
                           batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers)
+                          num_workers=self.hparams.num_workers,
+                          pin_memory=True)
 
 
 class BaselineSet(Dataset):
