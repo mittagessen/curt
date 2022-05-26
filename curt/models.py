@@ -92,7 +92,7 @@ class CurtCurveModel(LightningModule):
                        'class_error': loss_dict['class_error'],
                        **loss_dict_scaled,
                        **loss_dict_unscaled},
-                       sync_dist=True)
+                       batch_size=1)
 
     def configure_optimizers(self):
         param_dicts = [
