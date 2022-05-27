@@ -103,7 +103,7 @@ def cli(ctx, verbose, seed):
 @click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
 @click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
 @click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
-@click.option('--eos-coef', default=0.1, help='Relative classification weight of the no-object class')
+@click.option('--focal-alpha', default=0.25, help='Relative classification weight of the no-object class in focal loss')
 @click.option('--mask-loss-coef', default=1.0, help='Mask loss coefficient')
 @click.option('--dice-loss-coef', default=1.0, help='Mask dice loss coefficient')
 @click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
@@ -134,7 +134,7 @@ def cli(ctx, verbose, seed):
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
               batch_size, weight_decay, epochs, freq, lr_drop, dropout,
-              match_cost_class, match_cost_curve, curve_loss_coef, eos_coef,
+              match_cost_class, match_cost_curve, curve_loss_coef, focal_alpha,
               mask_loss_coef, dice_loss_coef, load, output, partition,
               training_files, evaluation_files, valid_baselines, merge_baselines,
               merge_all_baselines, workers, device, ground_truth):
@@ -211,7 +211,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.pass_context
 @click.option('--precision', default='32', type=click.Choice(['64', '32', '16', 'bf16']), help='set tensor precision')
 @click.option('-lr', '--learning-rate', default=1e-4, help='Learning rate')
-@click.option('-blr', '--backbone-learning-rate', default=1e-4, help='Learning rate')
+@click.option('-blr', '--backbone-learning-rate', default=1e-5, help='Learning rate')
 @click.option('-B', '--batch-size', default=1, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
 @click.option('-c', '--clip-norm', default=0.1, help='Gradient clipping threshold')
@@ -221,17 +221,16 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
                    'during training. If frequency is >1 it must be an integer, '
                    'i.e. running validation every n-th epoch.')
 @click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
-@click.option('--encoder', default='mit_b0', type=click.Choice(['mit_b0', 'mit_b1', 'mit_b2', 'mit_b3', 'mit_b4', 'mit_b5']), help='Encoding max transformers architecture')
+@click.option('-el', '--encoder-layers', default=3, help='Number of encoder layers in the transformer')
 @click.option('-dl', '--decoder-layers', default=3, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
 @click.option('-edd', '--embedding-dim', default=256, help='Size of the embeddings (dimension of the transformer')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')
 @click.option('-nh', '--num-heads', default=8, help="Number of attention heads inside the transformer's attentions")
 @click.option('-nq', '--num-queries', default=500, help='Number of query slots (#lines + #regions detectable in an image)')
-@click.option('--match-cost-class', default=1.0, help='Class coefficient in the matching cost')
+@click.option('--match-cost-class', default=2.0, help='Class coefficient in the matching cost')
 @click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
-@click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
-@click.option('--eos-coef', default=0.1, help='Relative classification weight of the no-object class')
+@click.option('--focal-alpha', default=0.25, help='Relative classification weight of the no-object class in focal loss')
 @click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
 @click.option('-o', '--output', show_default=True, type=click.Path(), default='curt_model', help='Pytorch lightning output directory')
 @click.option('-p', '--partition', show_default=True, default=0.9,
@@ -261,10 +260,10 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-d', '--device', show_default=True, default='1', help='Select device to use')
 @click.argument('ground_truth', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
 def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
-          weight_decay, clip_norm, epochs, freq, lr_drop, encoder,
+          weight_decay, clip_norm, epochs, freq, lr_drop, encoder_layers,
           decoder_layers, dim_ff, embedding_dim, dropout, num_heads,
           num_queries, match_cost_class, match_cost_curve, curve_loss_coef,
-          eos_coef, load, output, partition, training_files, evaluation_files,
+          focal_alpha, load, output, partition, training_files, evaluation_files,
           valid_baselines, merge_baselines, merge_all_baselines, set_matcher,
           aux_loss, workers, device, ground_truth):
 
@@ -312,12 +311,12 @@ def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
                                match_cost_class=match_cost_class,
                                match_cost_curve=match_cost_curve,
                                curve_loss_coef=curve_loss_coef,
-                               eos_coef=eos_coef,
+                               focal_alpha=focal_alpha,
                                embedding_dim=embedding_dim,
                                dropout=dropout,
                                num_heads=num_heads,
                                dim_ff=dim_ff,
-                               encoder=encoder,
+                               encoder_layers=encoder_layers,
                                decoder_layers=decoder_layers,
                                set_matcher=set_matcher,
                                aux_loss=aux_loss,

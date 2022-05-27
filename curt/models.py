@@ -1,6 +1,7 @@
 """
 CURT model and criterion classes.
 """
+import math
 import torch
 import torch.nn.functional as F
 
@@ -8,10 +9,10 @@ from torch import nn
 from pytorch_lightning import LightningModule
 from typing import Tuple
 
-from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy
+from curt.util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy, inverse_sigmoid
 from curt.head import CurveFormerHead, SegmentationHead, CurveHead
 from curt.matcher import HungarianMatcher, DummyMatcher
-from curt.detr_transformer import Transformer
+from curt.cdetr_transformer import Transformer
 from curt.detr_stuff import Backbone
 from curt.scheduler import get_cosine_schedule_with_warmup
 
@@ -26,13 +27,12 @@ class CurtCurveModel(LightningModule):
                  match_cost_class: float = 1.0,
                  match_cost_curve: float = 5.0,
                  curve_loss_coef: float = 5.0,
-                 eos_coef: float = 0.1,
                  embedding_dim: int = 256,
                  dropout: float = 0.1,
                  num_heads: int = 8,
                  dim_ff: int = 2048,
+                 encoder_layers: int = 3,
                  decoder_layers: int = 3,
-                 encoder: str = 'mit_b0',
                  set_matcher: bool = True,
                  aux_loss: bool = False,
                  batches_per_epoch: int = -1,
@@ -66,7 +66,7 @@ class CurtCurveModel(LightningModule):
         losses = ['labels', 'curves', 'cardinality']
 
         self.criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
-                                      eos_coef=eos_coef, losses=losses)
+                                      focal_alpha=focal_alpha, losses=losses)
 
     def training_step(self, batch, batch_idx):
         samples, targets = batch
@@ -152,15 +152,27 @@ class Curt(nn.Module):
                                        dropout=dropout,
                                        nhead=num_heads,
                                        dim_feedforward=dim_ff,
-                                       num_encoder_layers=num_decoder_layers,
+                                       num_queries=num_queries,
+                                       num_encoder_layers=num_encoder_layers,
                                        num_decoder_layers=num_decoder_layers,
                                        normalize_before=False,
                                        return_intermediate_dec=True)
+
         self.input_proj = nn.Conv2d(self.backbone.num_channels, embedding_dim, kernel_size=1)
         self.query_embed = nn.Embedding(num_queries, embedding_dim)
 
         self.curve_embed = CurveHead(embedding_dim, embedding_dim, 8, 3)
+        # initialize curve embed
+        nn.init.constant_(self.curve_embed.layers[-1].weight.data, 0)
+        nn.init.constant_(self.curve_embed.layers[-1].bias.data, 0)
+
         self.class_embed = nn.Linear(embedding_dim, num_classes+1)
+
+        # init prior_prob setting for focal loss
+        prior_prob = 0.01
+        bias_value = -math.log((1 - prior_prob) / prior_prob)
+        self.class_embed.bias.data = torch.ones(num_classes) * bias_value
+
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -176,10 +188,19 @@ class Curt(nn.Module):
         """
         features, pos = self.backbone(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features.shape[-2:]).to(torch.bool).squeeze(1)
-        hs = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos)[0]
+
+        hs, reference = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos)[0]
+
+        reference_before_sigmoid = inverse_sigmoid(reference)
+        pred_curves = []
+        for lvl in range(hs.shape[0]):
+            tmp = self.curve_embed(hs[lvl])
+            tmp[..., :2] += reference_before_sigmoid
+            pred_curves = tmp.sigmoid()
+            pred_curves.append(pred_curves)
+        pred_curves = torch.stack(pred_curves)
 
         pred_logits = self.class_embed(hs)
-        pred_curves = self.curve_embed(hs).sigmoid()
 
         out = {'pred_logits': pred_logits[-1], 'pred_curves': pred_curves[-1]}
         if self.aux_loss:
