@@ -230,6 +230,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-nq', '--num-queries', default=500, help='Number of query slots (#lines + #regions detectable in an image)')
 @click.option('--match-cost-class', default=2.0, help='Class coefficient in the matching cost')
 @click.option('--match-cost-curve', default=5.0, help='L1 curve coefficient in the matching cost')
+@click.option('--curve-loss-coef', default=5.0, help='L1 curve coefficient in the loss')
 @click.option('--focal-alpha', default=0.25, help='Relative classification weight of the no-object class in focal loss')
 @click.option('-i', '--load', show_default=True, type=click.Path(exists=True, readable=True), help='Load existing file to continue training')
 @click.option('-o', '--output', show_default=True, type=click.Path(), default='curt_model', help='Pytorch lightning output directory')
