@@ -380,10 +380,9 @@ class SetCriterion(nn.Module):
         target_classes_onehot = target_classes_onehot[:,:,:-1]
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_curves, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
         losses = {'loss_ce': loss_ce}
+        losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
 
         return losses
-
-
 
     @torch.no_grad()
     def loss_cardinality(self, outputs, targets, indices, num_curves):
