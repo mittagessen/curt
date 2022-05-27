@@ -48,7 +48,9 @@ class CurtCurveModel(LightningModule):
                           dropout=dropout,
                           num_heads=num_heads,
                           dim_ff=dim_ff,
-                          aux_loss=aux_loss)
+                          aux_loss=aux_loss,
+                          num_encoder_layers=encoder_layers,
+                          num_decoder_layers=decoder_layers)
 
         if set_matcher:
             matcher = HungarianMatcher(cost_class=match_cost_class,
@@ -123,6 +125,7 @@ class Curt(nn.Module):
     def __init__(self,
                  num_classes: int,
                  num_queries: int,
+                 num_encoder_layers: int = 3,
                  num_decoder_layers: int = 3,
                  embedding_dim: int = 256,
                  dropout: float = 0.1,
