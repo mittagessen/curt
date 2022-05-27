@@ -27,6 +27,7 @@ class CurtCurveModel(LightningModule):
                  match_cost_class: float = 1.0,
                  match_cost_curve: float = 5.0,
                  curve_loss_coef: float = 5.0,
+                 focal_alpha: float = 0.25,
                  embedding_dim: int = 256,
                  dropout: float = 0.1,
                  num_heads: int = 8,
