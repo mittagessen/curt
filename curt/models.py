@@ -200,8 +200,8 @@ class Curt(nn.Module):
         for lvl in range(hs.shape[0]):
             tmp = self.curve_embed(hs[lvl])
             tmp[..., :2] += reference_before_sigmoid
-            pred_curves = tmp.sigmoid()
-            pred_curves.append(pred_curves)
+            _pred_curves = tmp.sigmoid()
+            pred_curves.append(_pred_curves)
         pred_curves = torch.stack(pred_curves)
 
         pred_logits = self.class_embed(hs)
