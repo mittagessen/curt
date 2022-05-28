@@ -30,6 +30,7 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
+
 def gen_sineembed_for_position(pos_tensor):
     # n_query, bs, _ = pos_tensor.size()
     # sineembed_tensor = torch.zeros(n_query, bs, 256)
@@ -44,6 +45,7 @@ def gen_sineembed_for_position(pos_tensor):
     pos_y = torch.stack((pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=3).flatten(2)
     pos = torch.cat((pos_y, pos_x), dim=2)
     return pos
+
 
 class Transformer(nn.Module):
 
@@ -123,8 +125,8 @@ class TransformerDecoder(nn.Module):
         self.num_layers = num_layers
         self.norm = norm
         self.return_intermediate = return_intermediate
-        self.query_scale = MLP(d_model, d_model, d_model, 2)
-        self.ref_point_head = MLP(d_model, d_model, 2, 2)
+        self.query_scale = MLP(d_model, d_model, d_model, 8)
+        self.ref_point_head = MLP(d_model, d_model, 8, 8)
         for layer_id in range(num_layers - 1):
             self.layers[layer_id + 1].ca_qpos_proj = None
 
@@ -138,11 +140,11 @@ class TransformerDecoder(nn.Module):
         output = tgt
 
         intermediate = []
-        reference_points_before_sigmoid = self.ref_point_head(query_pos)    # [num_queries, batch_size, 2]
+        reference_points_before_sigmoid = self.ref_point_head(query_pos)    # [num_queries, batch_size, 8]
         reference_points = reference_points_before_sigmoid.sigmoid().transpose(0, 1)
 
         for layer_id, layer in enumerate(self.layers):
-            obj_center = reference_points[..., :2].transpose(0, 1)      # [num_queries, batch_size, 2]
+            obj_center = reference_points.transpose(0, 1)      # [num_queries, batch_size, 8]
 
             # For the first decoder layer, we do not apply transformation over p_s
             if layer_id == 0:
@@ -151,7 +153,7 @@ class TransformerDecoder(nn.Module):
                 pos_transformation = self.query_scale(output)
 
             # get sine embedding for the query vector
-            query_sine_embed = gen_sineembed_for_position(obj_center)     
+            query_sine_embed = gen_sineembed_for_position(obj_center)
             # apply transformation
             query_sine_embed = query_sine_embed * pos_transformation
             output = layer(output, memory, tgt_mask=tgt_mask,

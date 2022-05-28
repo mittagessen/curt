@@ -193,13 +193,13 @@ class Curt(nn.Module):
         features, pos = self.backbone(samples.tensors)
         mask = F.interpolate(samples.mask.unsqueeze(1).float(), size=features.shape[-2:]).to(torch.bool).squeeze(1)
 
-        hs, reference = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos)
+        hs, references = self.transformer(self.input_proj(features), mask, self.query_embed.weight, pos)
 
-        reference_before_sigmoid = inverse_sigmoid(reference)
+        references_before_sigmoid = inverse_sigmoid(references)
         pred_curves = []
         for lvl in range(hs.shape[0]):
             tmp = self.curve_embed(hs[lvl])
-            tmp[..., :2] += reference_before_sigmoid
+            tmp += references_before_sigmoid
             _pred_curves = tmp.sigmoid()
             pred_curves.append(_pred_curves)
         pred_curves = torch.stack(pred_curves)
