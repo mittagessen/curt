@@ -215,14 +215,14 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-B', '--batch-size', default=1, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
 @click.option('-c', '--clip-norm', default=0.1, help='Gradient clipping threshold')
-@click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
+@click.option('-N', '--epochs', default=100, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
                    'during training. If frequency is >1 it must be an integer, '
                    'i.e. running validation every n-th epoch.')
-@click.option('-lr-drop', '--lr-drop', default=200, help='Reduction factor of learning rate over time')
-@click.option('-el', '--encoder-layers', default=3, help='Number of encoder layers in the transformer')
-@click.option('-dl', '--decoder-layers', default=3, help='Number of decoder layers in the transformer')
+@click.option('-lr-drop', '--lr-drop', default=40, help='Reduction factor of learning rate over time')
+@click.option('-el', '--encoder-layers', default=6, help='Number of encoder layers in the transformer')
+@click.option('-dl', '--decoder-layers', default=6, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
 @click.option('-edd', '--embedding-dim', default=256, help='Size of the embeddings (dimension of the transformer')
 @click.option('--dropout', default=0.1, help='Dropout applied in the transformer')

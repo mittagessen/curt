@@ -97,6 +97,7 @@ class CurtCurveModel(LightningModule):
                        **loss_dict_unscaled},
                        batch_size=1)
 
+
     def configure_optimizers(self):
         param_dicts = [
             {"params": [p for n, p in self.model.named_parameters() if 'backbone' not in n and p.requires_grad]},
@@ -110,14 +111,8 @@ class CurtCurveModel(LightningModule):
                                       lr=self.hparams.learning_rate,
                                       weight_decay=self.hparams.weight_decay)
 
-        lr_scheduler = get_cosine_schedule_with_warmup(optimizer,
-                                                       num_warmup_steps=8000,
-                                                       num_training_steps=self.hparams.batches_per_epoch*self.hparams.num_epochs)
-
-        return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
-
-    def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
-        optimizer.zero_grad(set_to_none=True)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.hparams.lr_drop)
+        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 
 
 class Curt(nn.Module):
