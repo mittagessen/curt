@@ -15,7 +15,7 @@ from curt.head import CurveFormerHead, SegmentationHead, CurveHead
 from curt.matcher import HungarianMatcher, DummyMatcher
 from curt.cdetr_transformer import Transformer
 from curt.detr_stuff import Backbone
-from curt.scheduler import get_cosine_schedule_with_warmup
+
 
 class CurtCurveModel(LightningModule):
     def __init__(self,
