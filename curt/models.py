@@ -3,6 +3,7 @@ CURT model and criterion classes.
 """
 import math
 import torch
+import torch.optim.lr_scheduler
 import torch.nn.functional as F
 
 from torch import nn
