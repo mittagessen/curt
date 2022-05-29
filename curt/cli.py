@@ -220,7 +220,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
               help='Model saving and report generation frequency in epochs '
                    'during training. If frequency is >1 it must be an integer, '
                    'i.e. running validation every n-th epoch.')
-@click.option('-lr-drop', '--lr-drop', default=40, help='Reduction factor of learning rate over time')
+@click.option('-lr-drop', '--lr-drop', default=90, help='Reduction factor of learning rate over time')
 @click.option('-el', '--encoder-layers', default=6, help='Number of encoder layers in the transformer')
 @click.option('-dl', '--decoder-layers', default=6, help='Number of decoder layers in the transformer')
 @click.option('-dff', '--dim-ff', default=2048, help='Intermediate size of the feedforward layers in the transformer block')
