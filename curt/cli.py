@@ -215,7 +215,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 @click.option('-B', '--batch-size', default=1, help='Batch size')
 @click.option('-w', '--weight-decay', default=1e-4, help='Weight decay in optimizer')
 @click.option('-c', '--clip-norm', default=0.1, help='Gradient clipping threshold')
-@click.option('-N', '--epochs', default=100, help='Number of epochs to train for')
+@click.option('-N', '--epochs', default=300, help='Number of epochs to train for')
 @click.option('-F', '--freq', show_default=True, default=1.0, type=click.FLOAT,
               help='Model saving and report generation frequency in epochs '
                    'during training. If frequency is >1 it must be an integer, '
