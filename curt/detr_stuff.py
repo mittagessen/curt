@@ -126,7 +126,7 @@ class Backbone(nn.Module):
         self.backbone = timm.create_model('tf_efficientnetv2_s_in21k',
                                           features_only=True,
                                           pretrained=True,
-                                          out_indices=None if return_interm_layers else (2,))
+                                          out_indices=None if return_interm_layers else (4,))
         self.pos_embed = PositionEmbeddingSine(transformer_dim//2, normalize=True)
         self.return_interm_layers = return_interm_layers
         self.num_channels = self.backbone.feature_info.channels()[0]
