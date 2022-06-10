@@ -123,7 +123,7 @@ class Backbone(nn.Module):
     """EfficientNetv2 backbone with positional encoding in output layer"""
     def __init__(self, train_backbone: bool, return_interm_layers: bool = False, transformer_dim: int = 256):
         super().__init__()
-        self.backbone = timm.create_model('tf_efficientnetv2_s_in21k',
+        self.backbone = timm.create_model('tf_efficientnetv2_m_in21k',
                                           features_only=True,
                                           pretrained=True,
                                           output_stride=16,
