@@ -188,7 +188,7 @@ def polytrain(ctx, precision, learning_rate, backbone_learning_rate,
 #    for k, v in data_module.curve_train.dataset.class_mapping.items():
 #        click.echo(f'{k}\t{v}')
 
-    checkpoint_cb = ModelCheckpoint(monitor='loss', save_top_k=5, mode='min')
+    checkpoint_cb = ModelCheckpoint(every_n_epochs=1)
 
     if precision != 'bf16':
         precision = int(precision)
