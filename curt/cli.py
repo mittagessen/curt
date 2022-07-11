@@ -345,7 +345,7 @@ def train(ctx, precision, learning_rate, backbone_learning_rate, batch_size,
 @cli.command('pred')
 @click.pass_context
 @click.option('-i', '--load', help='Input model')
-@click.option('-o', '--suffix', default='.overlay.png', show_default=True, help='Suffix for output files')
+@click.option('-o', '--suffix', default='.reco.txt', show_default=True, help='Suffix for output files')
 @click.option('-t', '--threshold', default=0.9, show_default=True, help='Minimum score for objectness')
 @click.option('-d', '--device', show_default=True, default='cpu', help='Select device to use (cpu, cuda:0, cuda:1, ...)')
 @click.argument('input_files', nargs=-1, callback=_expand_gt, type=click.Path(exists=False, dir_okay=False))
@@ -354,7 +354,7 @@ def pred(ctx, load, suffix, threshold, device, input_files):
     curt_model = CurtCurveModel.load_from_checkpoint(load).model
     curt_model = curt_model.to(device)
 
-    transforms = tf.Compose([tf.Resize(800),
+    transforms = tf.Compose([tf.Resize(1500),
                              tf.ToTensor(),
                              tf.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
@@ -363,14 +363,13 @@ def pred(ctx, load, suffix, threshold, device, input_files):
         file = pathlib.Path(file)
         with open(file, 'rb') as fp:
             im = Image.open(file)
-            with open(file.with_suffix(suffix), 'wb') as fo:
+            with open(file.with_suffix(suffix), 'w') as fo:
                 with torch.no_grad():
                     i = transforms(im).to(device).unsqueeze(0)
                     mask = torch.zeros((1,) + i.shape[2:], device=device)
                     i = NestedTensor(i, mask)
                     o = curt_model(i)
-                draw = ImageDraw.Draw(im)
-                samples = np.linspace(0, 1, 20)
+                samples = np.linspace(0, 1, 10)
                 curves, logits = o['pred_curves'], o['pred_logits']
                 scores, labels = logits.softmax(-1).max(-1)
                 keep = labels.eq(1) & (scores > threshold)
@@ -379,9 +378,8 @@ def pred(ctx, load, suffix, threshold, device, input_files):
                 for line in curves:
                     line = (np.array(line) * (im.size * 4))
                     line.resize(4, 2)
-                    draw.line([tuple(x) for x in np.array(BezierCoeff(samples)).dot(line)], fill=(0, 130, 200, 255), width=2, joint='curve')
-                del draw
-                im.save(fo, format='png')
+                    line = np.array(BezierCoeff(samples)).dot(line).astype('int').tolist()
+                    fo.write(';'.join([','.join((str(x[0]), str(x[1]))) for x in line]) + '\n')
 
 if __name__ == '__main__':
     cli()
